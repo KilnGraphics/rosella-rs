@@ -62,6 +62,44 @@ mod partition {
                     }
             }
         }
+
+        pub fn iter(&self) -> PartitionIterator<V, T, DIM> {
+            PartitionIterator::new(&self.first)
+        }
+    }
+
+    pub struct PartitionIterator<'a, V, T: Add + Sub + Ord + Copy + Default, const DIM: usize> {
+        current: Option<&'a Entry<V, T, DIM>>,
+    }
+
+    impl<'a, V, T: Add + Sub + Ord + Copy + Default, const DIM: usize> PartitionIterator<'a, V, T, DIM> where [T; DIM]:Default {
+        fn new(first: &'a EntryChain<V, T, DIM>) -> PartitionIterator<'a, V, T, DIM> {
+            match first {
+                None => PartitionIterator{ current: None },
+                Some(current) => PartitionIterator{ current: Some(current.as_ref()) }
+            }
+        }
+    }
+
+    impl<'a, V, T: Add + Sub + Ord + Copy + Default, const DIM: usize> Iterator for PartitionIterator<'a, V, T, DIM> where [T; DIM]:Default {
+        type Item = (&'a Extent<T, DIM>, &'a Arc<V>);
+
+        fn next(&mut self) -> Option<Self::Item> {
+            match self.current {
+                None => None,
+                Some(current) => match current.next {
+                    None => {
+                        self.current = None;
+                        None
+                    },
+                    Some(ref next) => {
+                        let current = next.as_ref();
+                        self.current = Some(current);
+                        Some((&current.extent, &current.value))
+                    }
+                }
+            }
+        }
     }
 
     struct Entry<V, T: Add + Sub + Ord + Copy + Default, const DIM: usize> {
@@ -153,6 +191,16 @@ mod partition {
                     None
                 }
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_empty() {
+
         }
     }
 }

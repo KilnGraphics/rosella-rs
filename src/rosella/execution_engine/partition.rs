@@ -86,12 +86,50 @@ mod partition {
             }
         }
 
-        fn transition_split(&mut self, extent: &Extent<T, DIM>, overlap: Extent<T, DIM>, transition_function: TransitionFunction<V, T, DIM>) {
-            todo!()
+        fn transition_split(&mut self, extent: &Extent<T, DIM>, transition_function: TransitionFunction<V, T, DIM>) {
+            // Put new entries into a temporary list to prevent transition_recurse from iterating through them
+            let mut new_chain: Vec<EntryChain<V, T, DIM>> = Vec::new();
+            for i in 0..DIM {
+                if extent.start[i] < self.extent.start[i] {
+                    let mut new = *extent;
+                    new.end[i] = self.extent.start[i];
+                    self.transition_recurse(&new, transition_function);
+                }
+                if extent.end[i] > self.extent.end[i] {
+                    let mut new = *extent;
+                    new.start[i] = self.extent.end[i];
+                    self.transition_recurse(&new, transition_function);
+                }
+
+                if self.extent.start[i] < extent.start[i] {
+                    let mut new = self.extent;
+                    new.end[i] = extent.start[i];
+                    new_chain.push(Some(Box::new(Entry::new(new, Arc::clone(&self.value) ))));
+                    self.extent.start[i] = extent.start[i];
+                }
+                if self.extent.end[i] > extent.end[i] {
+                    let mut new = self.extent;
+                    new.start[i] = extent.end[i];
+                    new_chain.push(Some(Box::new(Entry::new(new, Arc::clone(&self.value) ))));
+                    self.extent.end[i] = extent.end[i];
+                }
+            }
+
+            // Add the entries from the temporary list to the main list
+            let mut last = self.next.take();
+            for mut entry in new_chain {
+                match entry {
+                    None => panic!(),
+                    Some(mut entry) => {
+                        entry.next = last;
+                        last = Some(entry);
+                    }
+                }
+            }
+            self.next = last;
         }
 
         fn transition(&mut self, extent: &Extent<T, DIM>, transition_function: TransitionFunction<V, T, DIM>) -> Option<EntryChain<V, T, DIM>> {
-            let mut remove = false;
             match self.extent.get_overlap(&extent) {
                 Some(overlap) => {
                     match transition_function(&overlap, Some(self.value.borrow())) {
@@ -100,12 +138,12 @@ mod partition {
                             None
                         },
                         TransitionAction::Update(value) => {
-                            self.transition_split(extent, overlap, transition_function);
+                            self.transition_split(extent, transition_function);
                             self.value = value;
                             None
                         }
                         TransitionAction::Clear => {
-                            self.transition_split(extent, overlap, transition_function);
+                            self.transition_split(extent, transition_function);
                             Some(self.next.take())
                         }
                     }

@@ -16,9 +16,20 @@ use crate::rosella::execution_engine::partition::Partition;
 /// visibility is dependant on the memory type and may require a call to
 /// [vkInvalidateMappedMemoryRanges].
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
-pub struct BufferEndState {
+pub struct BufferRangeState {
     pub host_available: bool,
     pub queue: Option<u32>,
+}
+
+pub enum BufferStateType {
+    Uniform(BufferRangeState),
+    Split(BufferRangeState), // TODO
+}
+
+pub struct BufferEndState {
+    pub id: u64,
+    pub state: BufferStateType,
+    _private: (),
 }
 
 /// Describes the state of an image subresource range after a execution.
@@ -37,8 +48,40 @@ pub struct BufferEndState {
 /// visibility is dependant on the memory type and may require a call to
 /// [vkInvalidateMappedMemoryRanges].
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
-pub struct ImageEndState {
+pub struct ImageRangeState {
     pub host_available: bool,
     pub layout: ash::vk::ImageLayout,
     pub queue: Option<u32>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub struct ImageMipRange {
+    base_level: u32,
+    level_count: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub struct ImageArrayRange {
+    base_layer: u32,
+    layer_count: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub struct ImageMipArrayRange {
+    mip_levels: ImageMipRange,
+    array_layers: ImageArrayRange,
+}
+
+#[derive(Clone, Debug)]
+pub enum ImageStateType {
+    Uniform(ImageRangeState),
+    SplitMipLevels(Vec<(ImageMipRange, ImageRangeState)>),
+    SplitArrayLayers(Vec<(ImageArrayRange, ImageRangeState)>),
+    SplitAll(Vec<(ImageMipRange, ImageArrayRange, ImageRangeState)>),
+}
+
+pub struct ImageEndState {
+    pub id: u64,
+    pub state: ImageStateType,
+    _private: (),
 }

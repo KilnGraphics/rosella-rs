@@ -21,15 +21,9 @@ pub struct BufferRangeState {
     pub queue: Option<u32>,
 }
 
-pub enum BufferStateType {
+pub enum BufferState {
     Uniform(BufferRangeState),
     Split(BufferRangeState), // TODO
-}
-
-pub struct BufferEndState {
-    pub id: u64,
-    pub state: BufferStateType,
-    _private: (),
 }
 
 /// Describes the state of an image subresource range after a execution.
@@ -73,15 +67,13 @@ pub struct ImageMipArrayRange {
 }
 
 #[derive(Clone, Debug)]
-pub enum ImageStateType {
+pub enum ImageState {
     Uniform(ImageRangeState),
     SplitMipLevels(Vec<(ImageMipRange, ImageRangeState)>),
     SplitArrayLayers(Vec<(ImageArrayRange, ImageRangeState)>),
-    SplitAll(Vec<(ImageMipRange, ImageArrayRange, ImageRangeState)>),
+    SplitAll(Vec<(ImageMipArrayRange, ImageRangeState)>),
 }
 
-pub struct ImageEndState {
-    pub id: u64,
-    pub state: ImageStateType,
-    _private: (),
+pub struct StateDictionary {
+
 }

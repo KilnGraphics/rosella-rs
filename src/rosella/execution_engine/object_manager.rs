@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+/*
 struct ObjectAllocator<'d> {
     device: &'d ash::vk::Device,
     allocator: vk_mem::Allocator,
@@ -68,3 +69,4 @@ impl Drop for VulkanImageInfo {
 }
 
 type VulkanImage<'a, 'd> = Arc<VulkanImageInfo<'a, 'd>>;
+ */

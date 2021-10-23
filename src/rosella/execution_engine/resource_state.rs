@@ -1,5 +1,3 @@
-use crate::rosella::execution_engine::partition::Partition;
-
 /// Describes the state of a buffer range after a execution.
 ///
 /// The range is defined by the context of this struct (For example, if provided by a uniform state

@@ -74,7 +74,7 @@ impl<T: Add + Sub + Ord + Copy + Clone + Default + Sync, const DIM:usize> Region
         Some(split_count)
     }
 
-    fn cut_regions<R: Mul<Output = R> + Ord + Copy + Clone + From<<T as Sub>::Output> + From<u8>>(&self, regions: &mut Vec<Region<T, DIM>>, intersections: &mut Vec<Region<T, DIM>>) -> R {
+    fn cut_regions<R: Add<Output = R> + Mul<Output = R> + Ord + Copy + Clone + From<<T as Sub>::Output> + From<u8>>(&self, regions: &mut Vec<Region<T, DIM>>, intersections: &mut Vec<Region<T, DIM>>) -> R {
         let mut volume = R::from(0);
         let mut tool_count = regions.len();
         let mut tail_count: usize = 0;
@@ -87,7 +87,7 @@ impl<T: Add + Sub + Ord + Copy + Clone + Default + Sync, const DIM:usize> Region
                     tail_count += count as usize;
                     regions.swap_remove(i);
 
-                    volume += current.volume();
+                    volume = volume + current.volume();
                     intersections.push(current);
 
                     // If there are no new entries at the end we swapped a value that needs to be processed as well.
@@ -131,7 +131,7 @@ impl<V: Sync, T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Ord + Cop
     fn chain_update<S: TransitionSystem<V, T, DIM>>(&mut self, transition_system: &mut S, regions: &mut Vec<Region<T, DIM>>, intersection_vec: &mut Vec<Region<T, DIM>>) {
         intersection_vec.clear();
 
-        self.region.cut_regions(regions, intersection_vec);
+        self.region.cut_regions::<T>(regions, intersection_vec);
         if !intersection_vec.is_empty() {
             transition_system.on_update(intersection_vec, self.value.borrow_mut(), &self.region);
         }

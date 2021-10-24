@@ -117,6 +117,8 @@ trait TransitionSystem<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> {
     fn on_override(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
 
     fn on_clear(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
+
+    fn on_create(&mut self, value_region: &Region<T, DIM>) -> Box<V>;
 }
 
 struct RegionInfo<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> {
@@ -132,6 +134,19 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> RegionInfo<V, T, DI
         Self { next: None, region, active_volume, value }
     }
 
+    fn new_next(region: Region<T, DIM>, value: Box<V>, next: Option<Box<Self>>) -> Self {
+        let active_volume = region.volume();
+        Self { next, region, active_volume, value }
+    }
+
+    fn create_regions<S: TransitionSystem<V, T, DIM>>(transition_system: &mut S, regions: &mut Vec<Region<T, DIM>>, mut next: Option<Box<Self>>) -> Option<Box<Self>> {
+        for region in regions {
+            let value = transition_system.on_create(region);
+            next = Some(Box::new(Self::new_next(*region, value, next)));
+        }
+        next
+    }
+
     fn chain_update<S: TransitionSystem<V, T, DIM>>(&mut self, transition_system: &mut S, regions: &mut Vec<Region<T, DIM>>, intersection_vec: &mut Vec<Region<T, DIM>>) {
         intersection_vec.clear();
 
@@ -140,8 +155,9 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> RegionInfo<V, T, DI
             transition_system.on_update(intersection_vec, self.value.borrow_mut(), &self.region);
         }
 
-        if let Some(ref mut next) = self.next {
-            next.chain_update(transition_system, regions, intersection_vec);
+        match self.next {
+            Some(ref mut next) => next.chain_update(transition_system, regions, intersection_vec),
+            None => self.next = Self::create_regions(transition_system, regions, self.next.take())
         }
     }
 
@@ -154,9 +170,15 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> RegionInfo<V, T, DI
         }
 
         if let Some(ref mut next) = self.next {
-            if let Some(new_next) = next.chain_override(transition_system, regions, intersection_vec) {
-                self.next = new_next;
+
+        }
+        match self.next {
+            Some(ref mut next) => {
+                if let Some(new_next) = next.chain_override(transition_system, regions, intersection_vec) {
+                    self.next = new_next;
+                }
             }
+            None => self.next = Self::create_regions(transition_system, regions, self.next.take())
         }
 
         if self.active_volume == T::zero() {
@@ -165,11 +187,66 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> RegionInfo<V, T, DI
             None
         }
     }
+
+    fn push_to_end(&mut self, end: Option<Box<Self>>) {
+        match self.next {
+            Some(ref mut next) => next.push_to_end(end),
+            None => self.next = end,
+        }
+    }
+}
+
+struct HistoryTracker<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> {
+    regions: Option<Box<RegionInfo<V, T, DIM>>>,
+}
+
+impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> HistoryTracker<V, T, DIM> {
+    fn is_empty(&self) -> bool {
+        self.regions.is_none()
+    }
+
+    fn update_regions_vec<S: TransitionSystem<V, T, DIM>>(&mut self, transition_system: &mut S, regions: &mut Vec<Region<T, DIM>>, tmp_vec: &mut Vec<Region<T, DIM>>) {
+        if regions.is_empty() {
+            panic!("Must not pass empty region set");
+        }
+
+        match self.regions {
+            Some(ref mut first) => first.chain_update(transition_system, regions, tmp_vec),
+            None => self.regions = RegionInfo::<V, T, DIM>::create_regions(transition_system, regions, None),
+        }
+    }
+
+    fn override_regions_vec<S: TransitionSystem<V, T, DIM>>(&mut self, transition_system: &mut S, regions: &mut Vec<Region<T, DIM>>, tmp_vec: &mut Vec<Region<T, DIM>>) {
+        if regions.is_empty() {
+            panic!("Must not pass empty region set");
+        }
+
+        let new_regions = RegionInfo::<V, T, DIM>::create_regions(transition_system, regions, None);
+
+        if let Some(ref mut first) = self.regions {
+            if let Some(new_first) = first.chain_override(transition_system, regions, tmp_vec) {
+                if new_first.is_some() {
+                    new_regions.push_to_end(new_first);
+                }
+            }
+        }
+        self.regions = new_regions;
+    }
 }
 
 struct BufferState {
     pending_writes: ash::vk::AccessFlags2KHR,
     pending_stages: ash::vk::PipelineStageFlags2KHR,
+    queued_accesses: ash::vk::AccessFlags2KHR,
+    queued_stages: ash::vk::PipelineStageFlags2KHR,
+}
+
+enum BufferTracking {
+    Uniform(BufferState),
+    Split()
+}
+
+struct BufferStateTracker {
 
 }
 

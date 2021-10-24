@@ -200,7 +200,7 @@ struct HistoryTracker<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> {
     regions: Option<Box<RegionInfo<V, T, DIM>>>,
 }
 
-impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> HistoryTracker<V, T, DIM> {
+impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> HistoryTracker<V, T, DIM> where [T; DIM]: Default {
     fn is_empty(&self) -> bool {
         self.regions.is_none()
     }
@@ -221,12 +221,14 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> HistoryTracker<V, T
             panic!("Must not pass empty region set");
         }
 
-        let new_regions = RegionInfo::<V, T, DIM>::create_regions(transition_system, regions, None);
+        let mut new_regions = RegionInfo::<V, T, DIM>::create_regions(transition_system, regions, None);
 
         if let Some(ref mut first) = self.regions {
             if let Some(new_first) = first.chain_override(transition_system, regions, tmp_vec) {
                 if new_first.is_some() {
-                    new_regions.push_to_end(new_first);
+                    if let Some(ref mut new) = new_regions {
+                        new.push_to_end(new_first);
+                    }
                 }
             }
         }

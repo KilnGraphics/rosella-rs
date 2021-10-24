@@ -164,5 +164,50 @@ impl<V: Sync, T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Ord + Cop
 }
 
 mod test {
+    use super::*;
 
+    #[test]
+    fn test_region_volume() {
+        let region = Region{ start: [0], end: [12] };
+        assert_eq!(region.volume::<i32>(), 12);
+
+        let region = Region{ start: [-12], end: [5] };
+        assert_eq!(region.volume::<i32>(), 17);
+
+        let region = Region{ start: [3], end: [3] };
+        assert_eq!(region.volume::<i32>(), 0);
+
+        let region = Region{ start: [0u32], end: [5u32] };
+        assert_eq!(region.volume::<u32>(), 5u32);
+
+        let region = Region{ start: [8u32], end: [8u32] };
+        assert_eq!(region.volume::<u32>(), 0u32);
+
+
+        let region = Region{ start: [0, 0], end: [12, 12] };
+        assert_eq!(region.volume::<i32>(), 144);
+
+        let region = Region{ start: [-12, 8], end: [5, 10] };
+        assert_eq!(region.volume::<i32>(), 34);
+
+        let region = Region{ start: [3, 7], end: [3, 19] };
+        assert_eq!(region.volume::<i32>(), 0);
+
+        let region = Region{ start: [7, 3], end: [19, 3] };
+        assert_eq!(region.volume::<i32>(), 0);
+
+        let region = Region{ start: [0u32, 0u32], end: [5u32, 5u32] };
+        assert_eq!(region.volume::<u32>(), 25u32);
+
+        let region = Region{ start: [8u32, 0u32], end: [8u32, 2u32] };
+        assert_eq!(region.volume::<u32>(), 0u32);
+
+        let region = Region{ start: [0u32, 8u32], end: [2u32, 8u32] };
+        assert_eq!(region.volume::<u32>(), 0u32);
+    }
+
+    #[test]
+    fn test_region_cut() {
+
+    }
 }

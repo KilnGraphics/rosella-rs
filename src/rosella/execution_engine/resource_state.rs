@@ -2,20 +2,24 @@ use std::borrow::BorrowMut;
 use std::cmp::{max, min};
 use std::ops::{Add, Mul, Sub};
 
+use num_traits::{Num, NumRef};
+
+trait PartNum : Num + Copy + Clone + Ord {}
+
 /// Describes a axis aligned rectangular volume.
 ///
 /// The volume is defined as the region between the points [start] (inclusive) and [end] (exclusive).
 /// [start] must always be less than or equal to [end] in all its entries. Some functions may
 /// require [start] to be strictly less than [end] to avoid zero volume.
 #[derive(Clone, Copy, Debug)]
-struct Region<T: Add + Sub + Ord + Copy + Clone + Default + Sync, const DIM: usize> {
+struct Region<T: PartNum, const DIM: usize> {
     start: [T; DIM],
     end: [T; DIM],
 }
 
-impl<T: Add + Sub + Ord + Copy + Clone + Default + Sync, const DIM:usize> Region<T, DIM> where [T; DIM] : Default {
-    fn volume<R: Mul<Output = R> + Ord + Copy + Clone + From<<T as Sub>::Output> + From<u8>>(&self) -> R {
-        let mut result = R::from(1);
+impl<T: PartNum, const DIM:usize> Region<T, DIM> where [T; DIM] : Default {
+    fn volume<R: Num + From<T>>(&self) -> R {
+        let mut result = R::one();
         for i in 0..DIM {
             result = result * R::from(self.end[i] - self.start[i]);
         }
@@ -74,8 +78,8 @@ impl<T: Add + Sub + Ord + Copy + Clone + Default + Sync, const DIM:usize> Region
         Some(split_count)
     }
 
-    fn cut_regions<R: Add<Output = R> + Mul<Output = R> + Ord + Copy + Clone + From<<T as Sub>::Output> + From<u8>>(&self, regions: &mut Vec<Region<T, DIM>>, intersections: &mut Vec<Region<T, DIM>>) -> R {
-        let mut volume = R::from(0);
+    fn cut_regions<R: Num + From<T>>(&self, regions: &mut Vec<Region<T, DIM>>, intersections: &mut Vec<Region<T, DIM>>) -> R {
+        let mut volume = R::zero();
         let mut tool_count = regions.len();
         let mut tail_count: usize = 0;
 
@@ -107,7 +111,7 @@ impl<T: Add + Sub + Ord + Copy + Clone + Default + Sync, const DIM:usize> Region
     }
 }
 
-trait TransitionSystem<V: Sync, T: Add + Sub + Ord + Copy + Clone + Default + Sync, const DIM:usize> {
+trait TransitionSystem<V: Sync, T: PartNum, const DIM:usize> {
     fn on_update(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
 
     fn on_override(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
@@ -115,14 +119,14 @@ trait TransitionSystem<V: Sync, T: Add + Sub + Ord + Copy + Clone + Default + Sy
     fn on_clear(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
 }
 
-struct RegionInfo<V: Sync, T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Ord + Copy + Clone + Default + Sync + From<u8>, const DIM: usize> {
+struct RegionInfo<V: Sync, T: PartNum, const DIM: usize> {
     next: Option<Box<Self>>,
     region: Region<T, DIM>,
     active_volume: T,
     value: Box<V>,
 }
 
-impl<V: Sync, T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Ord + Copy + Clone + Default + Sync + From<u8>, const DIM: usize> RegionInfo<V, T, DIM> where [T; DIM]: Default {
+impl<V: Sync, T: PartNum, const DIM: usize> RegionInfo<V, T, DIM> where [T; DIM]: Default {
     fn new(region: Region<T, DIM>, value: Box<V>) -> Self {
         let active_volume = region.volume();
         Self { next: None, region, active_volume, value }
@@ -155,7 +159,7 @@ impl<V: Sync, T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Ord + Cop
             }
         }
 
-        if self.active_volume == T::from(0) {
+        if self.active_volume == T::zero() {
             Some(self.next.take())
         } else {
             None

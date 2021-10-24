@@ -8,5 +8,6 @@ edition = "2018"
 [dependencies]
 ash = { git = "https://github.com/hYdos/ash" }
 ash-window = "0.7.0"
+num-traits = "0.2.14"
 # vk-mem = "0.2.2"
 winit = "0.25.0"

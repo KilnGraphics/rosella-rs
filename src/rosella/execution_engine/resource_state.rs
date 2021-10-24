@@ -157,7 +157,7 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> RegionInfo<V, T, DI
 
         match self.next {
             Some(ref mut next) => next.chain_update(transition_system, regions, intersection_vec),
-            None => self.next = Self::create_regions(transition_system, regions, self.next.take())
+            None => {}
         }
     }
 
@@ -169,16 +169,13 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> RegionInfo<V, T, DI
             transition_system.on_override(intersection_vec, self.value.borrow_mut(), &self.region);
         }
 
-        if let Some(ref mut next) = self.next {
-
-        }
         match self.next {
             Some(ref mut next) => {
                 if let Some(new_next) = next.chain_override(transition_system, regions, intersection_vec) {
                     self.next = new_next;
                 }
             }
-            None => self.next = Self::create_regions(transition_system, regions, self.next.take())
+            None => {}
         }
 
         if self.active_volume == T::zero() {
@@ -212,7 +209,7 @@ impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> HistoryTracker<V, T
 
         match self.regions {
             Some(ref mut first) => first.chain_update(transition_system, regions, tmp_vec),
-            None => self.regions = RegionInfo::<V, T, DIM>::create_regions(transition_system, regions, None),
+            None => {}
         }
     }
 

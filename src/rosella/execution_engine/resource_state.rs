@@ -4,20 +4,18 @@ use std::ops::{Add, Mul, Sub};
 
 use num_traits::{Num, NumRef};
 
-trait PartNum : Num + Copy + Clone + Ord {}
-
 /// Describes a axis aligned rectangular volume.
 ///
 /// The volume is defined as the region between the points [start] (inclusive) and [end] (exclusive).
 /// [start] must always be less than or equal to [end] in all its entries. Some functions may
 /// require [start] to be strictly less than [end] to avoid zero volume.
 #[derive(Clone, Copy, Debug)]
-struct Region<T: PartNum, const DIM: usize> {
+struct Region<T: Num + Copy + Clone + Ord, const DIM: usize> {
     start: [T; DIM],
     end: [T; DIM],
 }
 
-impl<T: PartNum, const DIM:usize> Region<T, DIM> where [T; DIM] : Default {
+impl<T: Num + Copy + Clone + Ord, const DIM:usize> Region<T, DIM> where [T; DIM] : Default {
     fn volume<R: Num + From<T>>(&self) -> R {
         let mut result = R::one();
         for i in 0..DIM {
@@ -111,7 +109,7 @@ impl<T: PartNum, const DIM:usize> Region<T, DIM> where [T; DIM] : Default {
     }
 }
 
-trait TransitionSystem<V: Sync, T: PartNum, const DIM:usize> {
+trait TransitionSystem<V: Sync, T: Num + Copy + Clone + Ord, const DIM:usize> {
     fn on_update(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
 
     fn on_override(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
@@ -119,14 +117,14 @@ trait TransitionSystem<V: Sync, T: PartNum, const DIM:usize> {
     fn on_clear(&mut self, affected_regions: &Vec<Region<T, DIM>>, value: &mut V, value_region: &Region<T, DIM>);
 }
 
-struct RegionInfo<V: Sync, T: PartNum, const DIM: usize> {
+struct RegionInfo<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> {
     next: Option<Box<Self>>,
     region: Region<T, DIM>,
     active_volume: T,
     value: Box<V>,
 }
 
-impl<V: Sync, T: PartNum, const DIM: usize> RegionInfo<V, T, DIM> where [T; DIM]: Default {
+impl<V: Sync, T: Num + Copy + Clone + Ord, const DIM: usize> RegionInfo<V, T, DIM> where [T; DIM]: Default {
     fn new(region: Region<T, DIM>, value: Box<V>) -> Self {
         let active_volume = region.volume();
         Self { next: None, region, active_volume, value }

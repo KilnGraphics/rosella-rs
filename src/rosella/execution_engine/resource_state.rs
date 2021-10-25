@@ -70,6 +70,9 @@ impl<T: Num + Copy + Clone + Ord, const DIM: usize> Region<T, DIM> where [T; DIM
                 split_count += 1;
                 fail = false;
             }
+            if self.start[a] >= tool.start[a] && self.end[a] <= tool.end[a] {
+                fail = false;
+            }
             if fail {
                 splits.resize_with(reset_count, || panic!("Should never increase in size"));
                 return None;
@@ -307,6 +310,16 @@ mod test {
 
         let mut vec = Vec::<Region<i32, 1>> ::new();
 
+        let mut intersection = Region { start: [0], end: [2] };
+        let count = intersection.cut(&Region { start: [-2], end: [5] }, &mut vec);
+
+        assert_eq!(intersection, Region { start: [0], end: [2] });
+        assert_eq!(count, Some(0));
+        assert_eq!(vec.len(), 0);
+
+
+        let mut vec = Vec::<Region<i32, 1>> ::new();
+
         let mut intersection = Region { start: [12], end: [37] };
         let count = intersection.cut(&Region { start: [7], end: [20] }, &mut vec);
 
@@ -335,5 +348,69 @@ mod test {
 
         assert_eq!(count, None);
         assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_region_cut3d() {
+        let mut vec = Vec::<Region<i32, 3>>::new();
+
+        let mut intersection = Region { start: [0, 0, 0], end: [2, 2, 2] };
+        let count = intersection.cut(&Region{ start: [1, 1, 1], end: [3, 3, 3] }, &mut vec);
+
+        assert_eq!(intersection, Region{ start: [1, 1, 1], end: [2, 2, 2]});
+        assert_eq!(count, Some(3));
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec[0], Region{ start: [0, 0, 0], end: [1, 2, 2]});
+        assert_eq!(vec[1], Region{ start: [1, 0, 0], end: [2, 1, 2]});
+        assert_eq!(vec[2], Region{ start: [1, 1, 0], end: [2, 2, 1]});
+    }
+
+    #[test]
+    fn test_region_cut_regions1d() {
+        let mut cuts = vec![Region{ start: [0], end: [10]}];
+        let mut intersections = Vec::new();
+
+        let volume = Region{ start: [5], end: [20]}.cut_regions::<i32>(&mut cuts, &mut intersections);
+
+        assert_eq!(volume, 5);
+        assert_eq!(cuts.len(), 1);
+        assert_eq!(cuts[0], Region{ start: [0], end: [5] });
+        assert_eq!(intersections.len(), 1);
+        assert_eq!(intersections[0], Region{ start: [5], end: [10] });
+
+
+        let mut cuts = vec![Region{ start: [0], end: [10]}];
+        let mut intersections = Vec::new();
+
+        let volume = Region{ start: [-10], end: [-5]}.cut_regions::<i32>(&mut cuts, &mut intersections);
+
+        assert_eq!(volume, 0);
+        assert_eq!(cuts.len(), 1);
+        assert_eq!(cuts[0], Region{ start: [0], end: [10] });
+        assert_eq!(intersections.len(), 0);
+
+
+        let mut cuts = vec![Region{ start: [0], end: [10]}];
+        let mut intersections = Vec::new();
+
+        let volume = Region{ start: [-5], end: [20]}.cut_regions::<i32>(&mut cuts, &mut intersections);
+
+        assert_eq!(volume, 10);
+        assert_eq!(cuts.len(), 0);
+        assert_eq!(intersections.len(), 1);
+        assert_eq!(intersections[0], Region{ start: [0], end: [10] });
+
+
+        let mut cuts = vec![Region{ start: [5], end: [10]}, Region{ start: [-10], end: [3]}];
+        let mut intersections = Vec::new();
+        let volume = Region{ start: [0], end: [8]}.cut_regions::<i32>(&mut cuts, &mut intersections);
+
+        assert_eq!(volume, 6);
+        assert_eq!(cuts.len(), 2);
+        assert_eq!(cuts[0], Region{ start: [8], end: [10] });
+        assert_eq!(cuts[1], Region{ start: [-10], end: [0] });
+        assert_eq!(intersections.len(), 2);
+        assert_eq!(intersections[0], Region{ start: [5], end: [8] });
+        assert_eq!(intersections[1], Region{ start: [0], end: [3] });
     }
 }

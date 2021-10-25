@@ -46,7 +46,17 @@ impl<T: Num + Copy + Clone + Ord, const DIM: usize> Region<T, DIM> where [T; DIM
         Some(result)
     }
 
+    /// Calculates a set of regions that define the volume that arises if the volume defined by self
+    /// is cut by some other region.
     ///
+    /// The regions making up the cut volume are pushed into [splits]. If a intersection was found
+    /// this function returns the number of regions added to splits. If no intersection was found
+    /// None is returned. If none is returned then any pre-existing values in [splits] will be
+    /// unmodified and no new ones will have been added. (The vec may still have triggered
+    /// reallocation as temporary regions may be added during the function execution)
+    ///
+    /// The intersection region is stored in self after this function returns. If there is no
+    /// intersection (i.e. None is returned) then the values stored in self are undefined.
     fn cut(&mut self, tool: &Self, splits: &mut Vec<Self>) -> Option<u8> {
         let reset_count = splits.len();
         let mut split_count: u8 = 0;

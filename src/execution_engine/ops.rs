@@ -24,11 +24,12 @@ impl<'a> OpMetadata<'a> {
 }
 
 pub struct OpList<'a> {
+    // Growth only. Potential memory leak if dropped.
     ops: Vec<OpMetadata<'a>>,
 }
 
 impl<'a> OpList<'a> {
-    pub fn allocate_add<T:OpAllocator>(&mut self) -> &'a mut T::O {
+    pub fn allocate_add<T: OpAllocator>(&mut self) -> &mut T::O {
         let op = Box::leak(Box::new(T::allocate()));
         unsafe {
             self.ops.push(OpMetadata::new(Box::from_raw(op)));

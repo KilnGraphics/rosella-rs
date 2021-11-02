@@ -11,8 +11,7 @@ pub trait Op : Any {
     fn as_any(&self) -> &dyn Any;
 }
 
-struct OpMetadata<'a> {
-    // This box is unsafe. DO NOT DROP IT BEFORE 'a EXPIRES (which is when the struct is destroyed so really just dont drop it ever)
+pub struct OpMetadata<'a> {
     op: Box<dyn Op>,
     phantom: PhantomData<&'a u8>,
 }
@@ -21,19 +20,23 @@ impl<'a> OpMetadata<'a> {
     fn new(op: Box<dyn Op>) -> Self {
         Self{ op, phantom: PhantomData }
     }
+
+    fn borrow_as_op<T: Op>(&mut self) -> &mut T {
+        self.op.as_mut().as_any().downcast_mut().unwrap()
+    }
 }
 
 pub struct OpList<'a> {
-    // Growth only. Potential memory leak if dropped.
     ops: Vec<OpMetadata<'a>>,
 }
 
 impl<'a> OpList<'a> {
-    pub fn allocate_add<T: OpAllocator>(&mut self) -> &mut T::O {
-        let op = Box::leak(Box::new(T::allocate()));
-        unsafe {
-            self.ops.push(OpMetadata::new(Box::from_raw(op)));
-        }
-        op
+    pub fn allocate_add<T: OpAllocator, F: Fn(&mut T::O, &mut OpMetadata) -> Result<(), &str>>(&mut self, setup: &F) -> Result<(), &str> {
+        let mut metadata = OpMetadata::new(Box::new(T::allocate()));
+
+        setup(metadata.borrow_as_op(), &mut metadata)?;
+
+        self.ops.push(op);
+        Result::Ok(())
     }
 }

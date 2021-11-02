@@ -1,3 +1,8 @@
+//! Ops are a low level intermediate representation of vulkan commands.
+//! The IR is organized as lists of ops where each list represents a single vulkan command buffer and
+//! every op has a 1 to 1 mapping to a vulkan command. Synchronization commands are omitted and
+//! vulkan objects are replaced with placeholder objects.
+
 use std::any::Any;
 use std::marker::PhantomData;
 
@@ -22,29 +27,26 @@ impl OpConfig {
     }
 }
 
-struct OpMetadata<'a> {
-    op: Box<dyn Op>,
-    config: OpConfig,
-    phantom: PhantomData<&'a u8>,
+pub struct OpEntry {
+    pub op: Box<dyn Op>,
+    pub config: OpConfig,
 }
 
-impl<'a> OpMetadata<'a> {
-    fn new(op: Box<dyn Op>) -> Self {
-        Self{ op, config: OpConfig::new(), phantom: PhantomData }
-    }
+pub struct OpList {
+    ops: Vec<OpEntry>,
 }
 
-pub struct OpList<'a> {
-    ops: Vec<OpMetadata<'a>>,
-}
+impl OpList {
+    pub fn allocate_add<'r, T: OpAllocator, F: Fn(&mut T::O, &mut OpConfig) -> Result<(), &'r str>>(&mut self, setup: &F) -> Result<(), &'r str> {
+        let mut entry = OpEntry{ op: Box::new(T::allocate()), config: OpConfig::new() };
 
-impl<'a> OpList<'a> {
-    pub fn allocate_add<T: OpAllocator, F: Fn(&mut T::O, &mut OpConfig) -> Result<(), &'static str>>(&mut self, setup: &F) -> Result<(), &'static str> {
-        let mut metadata = OpMetadata::new(Box::new(T::allocate()));
+        setup(entry.op.as_mut().as_any_mut().downcast_mut().unwrap(), &mut entry.config)?;
 
-        setup(metadata.op.as_mut().as_any_mut().downcast_mut().unwrap(), &mut metadata.config)?;
-
-        self.ops.push(metadata);
+        self.ops.push(entry);
         Result::Ok(())
+    }
+
+    pub fn get_entries(&self) -> &Vec<OpEntry> {
+        &self.ops
     }
 }

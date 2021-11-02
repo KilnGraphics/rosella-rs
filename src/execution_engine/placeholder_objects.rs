@@ -1,3 +1,13 @@
+//! Placeholder objects are used in the ops IR to represent vulkan objects. A placeholder object
+//! can either be a placeholder or fully defined.
+//!
+//! A placeholder can later be specialized into different objects at a commands level without needing
+//! to recompile the entire program. Since memory allocation takes place during the ops compile stage
+//! a placeholder object must be specialized by an external object.
+//!
+//! Fully defined objects on the other hand will be fixed after the ops compile stage. They can either
+//! be dynamically allocated by the ops compiler or be set to some external object.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_OBJECT_ID: AtomicU64 = AtomicU64::new(1);
@@ -119,3 +129,7 @@ define_object_reference!(Buffer, BufferId, DefinedBuffer, BufferReference, Buffe
 define_object_reference!(BufferView, BufferViewId, DefinedBufferView, BufferViewReference, BufferViewInfo);
 define_object_reference!(Image, ImageId, DefinedImage, ImageReference, ImageInfo);
 define_object_reference!(ImageView, ImageViewId, DefinedImageView, ImageViewReference, ImageViewInfo);
+
+pub struct PlaceholderObjectSet {
+
+}

@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 
 #[derive(Copy, Clone, Debug)]
 pub enum ImageSize {

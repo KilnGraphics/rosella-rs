@@ -220,7 +220,6 @@ pub enum BufferInfo {
 
 #[derive(Copy, Clone)]
 pub enum BufferViewInfo {
-    Placeholder(),
     External(),
     Internal(),
 }
@@ -234,7 +233,6 @@ pub enum ImageInfo {
 
 #[derive(Copy, Clone)]
 pub enum ImageViewInfo {
-    Placeholder(),
     External(),
     Internal(),
 }

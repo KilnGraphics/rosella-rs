@@ -113,9 +113,8 @@ macro_rules! define_object_reference {
     }
 }
 
-pub enum BufferInfo {
-    External{ },
-    Allocate{},
+pub struct BufferInfo {
+    spec: crate::objects::buffer::BufferSpec,
 }
 
 pub struct BufferViewInfo {

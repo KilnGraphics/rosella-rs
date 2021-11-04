@@ -299,6 +299,27 @@ impl PlaceholderObjectSet {
         }
         self.buffers.get(id.get_local_id() as usize)
     }
+
+    pub fn get_buffer_view_info(&self, id: BufferViewId) -> Option<&BufferViewInfo> {
+        if id.get_global_id() != self.global_id {
+            panic!("BufferViewId belongs to different PlaceholderObjectSet");
+        }
+        self.buffer_views.get(id.get_local_id() as usize)
+    }
+
+    pub fn get_image_info(&self, id: ImageId) -> Option<&ImageInfo> {
+        if id.get_global_id() != self.global_id {
+            panic!("ImageId belongs to different PlaceholderObjectSet");
+        }
+        self.images.get(id.get_local_id() as usize)
+    }
+
+    pub fn get_image_view_info(&self, id: ImageViewId) -> Option<&ImageViewInfo> {
+        if id.get_global_id() != self.global_id {
+            panic!("ImageViewId belongs to different PlaceholderObjectSet");
+        }
+        self.image_views.get(id.get_local_id() as usize)
+    }
 }
 
 mod test {

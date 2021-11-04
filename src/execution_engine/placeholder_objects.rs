@@ -113,7 +113,9 @@ macro_rules! define_object_reference {
     }
 }
 
-pub struct BufferInfo {
+pub enum BufferInfo {
+    External{ },
+    Allocate{},
 }
 
 pub struct BufferViewInfo {
@@ -131,5 +133,17 @@ define_object_reference!(Image, ImageId, DefinedImage, ImageReference, ImageInfo
 define_object_reference!(ImageView, ImageViewId, DefinedImageView, ImageViewReference, ImageViewInfo);
 
 pub struct PlaceholderObjectSet {
+
+}
+
+impl PlaceholderObjectSet {
+    pub fn new() -> Self {
+        PlaceholderObjectSet{}
+    }
+
+    pub fn add_placeholder_buffer(&mut self) -> BufferReference {
+        todo!()
+    }
+
 
 }

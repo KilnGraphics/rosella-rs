@@ -302,9 +302,23 @@ pub enum ImageInfo {
 }
 
 #[derive(Copy, Clone)]
+pub struct ExternalImageViewInfo {
+    pub image: ImageId,
+    pub range: ImageSubresourceRange,
+}
+
+#[derive(Copy, Clone)]
+pub struct InternalImageViewInfo {
+    pub image: ImageId,
+    pub range: ImageSubresourceRange,
+    pub format: Format,
+    pub component_mapping: vk::ComponentMapping,
+}
+
+#[derive(Copy, Clone)]
 pub enum ImageViewInfo {
-    External(),
-    Internal(),
+    External(ExternalImageViewInfo),
+    Internal(InternalImageViewInfo),
 }
 
 static NEXT_GLOBAL_ID : AtomicU64 = AtomicU64::new(1);
@@ -382,10 +396,16 @@ impl PlaceholderObjectSet {
     }
 
     pub fn define_external_buffer_view(&mut self, info: ExternalBufferViewInfo) -> Result<BufferViewId, &'static str> {
+        if info.buffer.get_global_id() != self.global_id {
+            return Err("Parent buffer is not part of this PlaceholderObjectSet");
+        }
         self.push_buffer_view(BufferViewInfo::External(info))
     }
 
     pub fn define_internal_buffer_view(&mut self, info: InternalBufferViewInfo) -> Result<BufferViewId, &'static str> {
+        if info.buffer.get_global_id() != self.global_id {
+            return Err("Parent buffer is not part of this PlaceholderObjectSet");
+        }
         self.push_buffer_view(BufferViewInfo::Internal(info))
     }
 
@@ -401,8 +421,18 @@ impl PlaceholderObjectSet {
         self.push_image(ImageInfo::Internal(info))
     }
 
-    pub fn define_external_image_view(&mut self) -> Result<ImageViewId, &'static str> {
-        self.push_image_view(ImageViewInfo::External())
+    pub fn define_external_image_view(&mut self, info: ExternalImageViewInfo) -> Result<ImageViewId, &'static str> {
+        if info.image.get_global_id() != self.global_id {
+            return Err("Parent image is not part of this PlaceholderObjectSet");
+        }
+        self.push_image_view(ImageViewInfo::External(info))
+    }
+
+    pub fn define_internal_image_view(&mut self, info: InternalImageViewInfo) -> Result<ImageViewId, &'static str> {
+        if info.image.get_global_id() != self.global_id {
+            return Err("Parent image is not part of this PlaceholderObjectSet");
+        }
+        self.push_image_view(ImageViewInfo::Internal(info))
     }
 
     pub fn get_buffer_info(&self, id: BufferId) -> Option<&BufferInfo> {

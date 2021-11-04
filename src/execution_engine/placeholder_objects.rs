@@ -13,7 +13,7 @@ use ash::vk;
 use std::fmt::{Debug, Formatter};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::objects::{BufferSpec, BufferRange, Format};
+use crate::objects::*;
 
 #[non_exhaustive]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -268,10 +268,37 @@ impl BufferViewInfo {
 }
 
 #[derive(Copy, Clone)]
+pub struct ExternalImageInfo {
+    pub spec: ImageSpec,
+    pub allowed_usage_flags: vk::ImageUsageFlags,
+}
+
+#[derive(Copy, Clone)]
+pub struct InternalImageInfo {
+    pub spec: ImageSpec,
+    pub additional_usage_flags: vk::ImageUsageFlags,
+    pub required_memory_properties: vk::MemoryPropertyFlags,
+    pub preferred_memory_properties: vk::MemoryPropertyFlags,
+    pub memory_type_restrictions: u32,
+}
+
+impl InternalImageInfo {
+    pub const fn make_unconstrained(spec: ImageSpec) -> Self {
+        InternalImageInfo{
+            spec,
+            additional_usage_flags: vk::ImageUsageFlags::empty(),
+            required_memory_properties: vk::MemoryPropertyFlags::all(),
+            preferred_memory_properties: vk::MemoryPropertyFlags::empty(),
+            memory_type_restrictions: !0u32,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 pub enum ImageInfo {
     Placeholder(),
-    External(),
-    Internal(),
+    External(ExternalImageInfo),
+    Internal(InternalImageInfo),
 }
 
 #[derive(Copy, Clone)]
@@ -364,6 +391,14 @@ impl PlaceholderObjectSet {
 
     pub fn define_placeholder_image(&mut self) -> Result<ImageId, &'static str> {
         self.push_image(ImageInfo::Placeholder())
+    }
+
+    pub fn define_external_image(&mut self, info: ExternalImageInfo) -> Result<ImageId, &'static str> {
+        self.push_image(ImageInfo::External(info))
+    }
+
+    pub fn define_internal_image(&mut self, info: InternalImageInfo) -> Result<ImageId, &'static str> {
+        self.push_image(ImageInfo::Internal(info))
     }
 
     pub fn define_external_image_view(&mut self) -> Result<ImageViewId, &'static str> {

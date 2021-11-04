@@ -129,3 +129,12 @@ impl ImageSpec {
         self.sample_count
     }
 }
+
+#[derive(Copy, Clone)]
+pub struct ImageSubresourceRange {
+    pub aspect_mask: ash::vk::ImageAspectFlags,
+    pub base_mip_level: u32,
+    pub mip_level_count: u32,
+    pub base_array_layer: u32,
+    pub array_layer_count: u32,
+}

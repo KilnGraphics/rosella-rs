@@ -8,10 +8,12 @@
 //! Fully defined objects on the other hand will be fixed after the ops compile stage. They can either
 //! be dynamically allocated by the ops compiler or be set to some external object.
 
-use std::fmt::{Debug, Formatter, Pointer};
+use ash::vk;
+
+use std::fmt::{Debug, Formatter};
 use std::sync::atomic::{AtomicU64, Ordering};
-use shaderc::ResourceKind::Buffer;
-use crate::objects::BufferSpec;
+
+use crate::objects::{BufferSpec, BufferRange, Format};
 
 #[non_exhaustive]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -198,17 +200,29 @@ define_object_id!(ImageViewId, ObjectType::IMAGE_VIEW);
 
 #[derive(Copy, Clone)]
 pub struct ExternalBufferInfo {
-    spec: crate::objects::BufferSpec,
-    allowed_usage_flags: ash::vk::BufferUsageFlags,
+    pub spec: BufferSpec,
+    pub allowed_usage_flags: vk::BufferUsageFlags,
 }
 
 #[derive(Copy, Clone)]
 pub struct InternalBufferInfo {
-    spec: crate::objects::BufferSpec,
-    additional_usage_flags: ash::vk::BufferUsageFlags,
-    required_memory_properties: ash::vk::MemoryPropertyFlags,
-    preferred_memory_properties: ash::vk::MemoryPropertyFlags,
-    // TODO memory_type_restrictions: ash::vk::MemoryTypeFlags,
+    pub spec: BufferSpec,
+    pub additional_usage_flags: vk::BufferUsageFlags,
+    pub required_memory_properties: vk::MemoryPropertyFlags,
+    pub preferred_memory_properties: vk::MemoryPropertyFlags,
+    pub memory_type_restrictions: u32,
+}
+
+impl InternalBufferInfo {
+    pub const fn make_unconstrained(spec: BufferSpec) -> Self {
+        InternalBufferInfo{
+            spec,
+            additional_usage_flags: vk::BufferUsageFlags::empty(),
+            required_memory_properties: vk::MemoryPropertyFlags::all(),
+            preferred_memory_properties: vk::MemoryPropertyFlags::empty(),
+            memory_type_restrictions: !0u32,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -219,9 +233,38 @@ pub enum BufferInfo {
 }
 
 #[derive(Copy, Clone)]
+pub struct ExternalBufferViewInfo {
+    pub buffer: BufferId,
+    pub range: BufferRange,
+}
+
+#[derive(Copy, Clone)]
+pub struct InternalBufferViewInfo {
+    pub buffer: BufferId,
+    pub range: BufferRange,
+    pub format: Format,
+}
+
+#[derive(Copy, Clone)]
 pub enum BufferViewInfo {
-    External(),
-    Internal(),
+    External(ExternalBufferViewInfo),
+    Internal(InternalBufferViewInfo),
+}
+
+impl BufferViewInfo {
+    pub const fn get_buffer(&self) -> BufferId {
+        match self {
+            BufferViewInfo::External(info) => info.buffer,
+            BufferViewInfo::Internal(info) => info.buffer,
+        }
+    }
+
+    pub const fn get_buffer_range(&self) -> BufferRange {
+        match self {
+            BufferViewInfo::External(info) => info.range,
+            BufferViewInfo::Internal(info) => info.range,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -281,16 +324,50 @@ impl PlaceholderObjectSet {
         Ok(BufferViewId::new(index, self.global_id))
     }
 
+    fn push_image(&mut self, image: ImageInfo) -> Result<ImageId, &'static str> {
+        let index : u64 = self.images.len() as u64;
+        if index > ObjectIdCommon::LOCAL_ID_MAX {
+            return Err("Too many images in PlaceholderObjectSet");
+        }
+        self.images.push(image);
+        Ok(ImageId::new(index, self.global_id))
+    }
+
+    fn push_image_view(&mut self, image_view: ImageViewInfo) -> Result<ImageViewId, &'static str> {
+        let index : u64 = self.buffer_views.len() as u64;
+        if index > ObjectIdCommon::LOCAL_ID_MAX {
+            return Err("Too many image views in PlaceholderObjectSet");
+        }
+        self.image_views.push(image_view);
+        Ok(ImageViewId::new(index, self.global_id))
+    }
+
     pub fn define_placeholder_buffer(&mut self) -> Result<BufferId, &'static str> {
         self.push_buffer(BufferInfo::Placeholder())
     }
 
     pub fn define_external_buffer(&mut self, info: ExternalBufferInfo) -> Result<BufferId, &'static str> {
-        todo!()
+        self.push_buffer(BufferInfo::External(info))
     }
 
     pub fn define_internal_buffer(&mut self, info: InternalBufferInfo) -> Result<BufferId, &'static str> {
-        todo!()
+        self.push_buffer(BufferInfo::Internal(info))
+    }
+
+    pub fn define_external_buffer_view(&mut self, info: ExternalBufferViewInfo) -> Result<BufferViewId, &'static str> {
+        self.push_buffer_view(BufferViewInfo::External(info))
+    }
+
+    pub fn define_internal_buffer_view(&mut self, info: InternalBufferViewInfo) -> Result<BufferViewId, &'static str> {
+        self.push_buffer_view(BufferViewInfo::Internal(info))
+    }
+
+    pub fn define_placeholder_image(&mut self) -> Result<ImageId, &'static str> {
+        self.push_image(ImageInfo::Placeholder())
+    }
+
+    pub fn define_external_image_view(&mut self) -> Result<ImageViewId, &'static str> {
+        self.push_image_view(ImageViewInfo::External())
     }
 
     pub fn get_buffer_info(&self, id: BufferId) -> Option<&BufferInfo> {

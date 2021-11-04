@@ -8,3 +8,4 @@ pub use image::ImageSize;
 pub use image::ImageSpec;
 
 pub use buffer::BufferSpec;
+pub use buffer::BufferRange;

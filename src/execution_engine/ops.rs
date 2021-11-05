@@ -18,10 +18,11 @@ pub trait Op : Any {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
-pub struct OpConfig {
+pub struct OpContext {
+
 }
 
-impl OpConfig {
+impl OpContext {
     fn new() -> Self {
         Self{}
     }
@@ -29,7 +30,7 @@ impl OpConfig {
 
 pub struct OpEntry {
     pub op: Box<dyn Op>,
-    pub config: OpConfig,
+    pub context: OpContext,
 }
 
 pub struct OpList {
@@ -37,10 +38,10 @@ pub struct OpList {
 }
 
 impl OpList {
-    pub fn allocate_add<'r, T: OpAllocator, F: Fn(&mut T::O, &mut OpConfig) -> Result<(), &'r str>>(&mut self, setup: &F) -> Result<(), &'r str> {
-        let mut entry = OpEntry{ op: Box::new(T::allocate()), config: OpConfig::new() };
+    pub fn allocate_add<'r, T: OpAllocator, F: Fn(&mut T::O, &mut OpContext) -> Result<(), &'r str>>(&mut self, setup: &F) -> Result<(), &'r str> {
+        let mut entry = OpEntry{ op: Box::new(T::allocate()), context: OpContext::new() };
 
-        setup(entry.op.as_mut().as_any_mut().downcast_mut().unwrap(), &mut entry.config)?;
+        setup(entry.op.as_mut().as_any_mut().downcast_mut().unwrap(), &mut entry.context)?;
 
         self.ops.push(entry);
         Result::Ok(())

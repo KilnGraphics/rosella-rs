@@ -97,12 +97,19 @@ fn main() {
         .element(data_type::FLOAT, 3)
         .build();
 
-    GraphicsShader::new(rosella.device.clone(), include_str!("test_resources/triangle.vert").to_string(), include_str!("test_resources/triangle.frag").to_string(), GraphicsContext {
-        mutable_uniforms: Default::default(),
-        push_uniforms: Default::default(),
+    let triangle_shader = GraphicsShader::new(rosella.device.clone(), include_str!("test_resources/triangle.vert").to_string(), include_str!("test_resources/triangle.frag").to_string(), GraphicsContext {
+        mutable_uniforms: HashSet::new(),
+        push_uniforms: HashSet::new(),
         vertex_format: basic_vertex_format,
     });
     println!("Successfully created shaders.");
+
+    ///=======================================
+    /// COMPUTE TESTING START.
+    /// ======================================
+
+
+    /// COMPUTE TESTING END.
 
     window.event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;

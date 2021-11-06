@@ -45,6 +45,36 @@ pub struct ComputeShader {
     pub compute_shader: ShaderModule,
 }
 
+impl ComputeShader {
+    /// Creates a new ComputeShader based on a glsl shader.
+    pub fn new(compute_shader: String, compute_context: ComputeContext) -> ComputeShader {
+        let mut compiler = Compiler::new().unwrap();
+        let mut options = CompileOptions::new().unwrap();
+
+        options.set_target_env(
+            TargetEnv::Vulkan,
+            Entry::new().try_enumerate_instance_version().ok().flatten().unwrap(),
+        );
+
+        let compute_shader = unsafe {
+            device.create_shader_module(
+                &ShaderModuleCreateInfo::builder().code(
+                    compiler
+                        .compile_into_spirv(&compute_shader, ShaderKind::Compute, "compute.glsl", "main", Some(&options))
+                        .expect("Failed to compile the ComputeShader.")
+                        .as_binary(),
+                ),
+                ALLOCATION_CALLBACKS,
+            )
+        }.unwrap();
+
+        ComputeShader {
+            compute_context,
+            compute_shader,
+        }
+    }
+}
+
 impl GraphicsShader {
     /// Creates a new GraphicsShader based on glsl shaders.
     pub fn new(

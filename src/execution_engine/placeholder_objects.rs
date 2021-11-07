@@ -451,6 +451,18 @@ impl PlaceholderObjectSet {
         }
         self.image_views.get(id.get_local_id() as usize)
     }
+
+    pub fn owns_object<const TYPE: u8>(&self, id: ObjectId<TYPE>) -> bool {
+        id.get_global_id() == self.global_id
+    }
+
+    pub fn get_buffer_count(&self) -> usize {
+        self.buffers.len()
+    }
+
+    pub fn get_image_count(&self) -> usize {
+        self.images.len()
+    }
 }
 
 mod test {

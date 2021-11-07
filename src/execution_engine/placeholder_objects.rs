@@ -310,6 +310,22 @@ pub enum ImageViewInfo {
     Internal(InternalImageViewInfo),
 }
 
+impl ImageViewInfo {
+    pub const fn get_image(&self) -> ImageId {
+        match self {
+            ImageViewInfo::External(info) => info.image,
+            ImageViewInfo::Internal(info) => info.image,
+        }
+    }
+
+    pub const fn get_image_subresource_range(&self) -> ImageSubresourceRange {
+        match self {
+            ImageViewInfo::External(info) => info.range,
+            ImageViewInfo::Internal(info) => info.range,
+        }
+    }
+}
+
 static NEXT_GLOBAL_ID: AtomicU64 = AtomicU64::new(1);
 
 fn make_global_id() -> u64 {

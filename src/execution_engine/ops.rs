@@ -5,6 +5,11 @@
 
 use std::any::Any;
 use std::marker::PhantomData;
+use crate::execution_engine::placeholder_objects::GenericId;
+
+pub trait ObjectUsageRegistry {
+    fn register_object_usage(&mut self, object: GenericId) -> Result<(), &'static str>;
+}
 
 pub trait OpAllocator {
     type O: Op;
@@ -16,6 +21,8 @@ pub trait Op : Any {
     fn as_any(&self) -> &dyn Any;
 
     fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    fn register_object_usage(&self, registry: &dyn ObjectUsageRegistry) -> Result<(), &'static str>;
 }
 
 pub struct OpContext {

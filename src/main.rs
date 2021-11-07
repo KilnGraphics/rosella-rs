@@ -8,7 +8,7 @@ use std::ops::BitAnd;
 use std::rc::Rc;
 
 use ash::extensions::khr::Swapchain;
-use ash::vk::{AccessFlags, Buffer, BufferCreateFlags, BufferCreateInfo, BufferImageCopy, BufferUsageFlags, ComponentMapping, ComponentSwizzle, ComputePipelineCreateInfo, DependencyFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSetAllocateInfo, DescriptorSetLayoutBinding, DescriptorSetLayoutBindingBuilder, DescriptorSetLayoutCreateInfo, DescriptorType, DeviceMemory, Extent3D, Format, Handle, ImageAspectFlags, ImageCreateInfo, ImageLayout, ImageMemoryBarrier, ImageSubresourceLayers, ImageSubresourceRange, ImageTiling, ImageType, ImageUsageFlags, ImageViewCreateInfo, ImageViewType, MemoryAllocateInfo, MemoryMapFlags, MemoryPropertyFlags, MemoryRequirements, PhysicalDeviceMemoryProperties, PipelineCache, PipelineCreateFlags, PipelineLayoutCreateInfo, PipelineShaderStageCreateInfo, PipelineStageFlags, QueueFlags, SampleCountFlags, ShaderStageFlags, SharingMode, WriteDescriptorSet};
+use ash::vk::{AccessFlags, Buffer, BufferCreateFlags, BufferCreateInfo, BufferImageCopy, BufferUsageFlags, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferResetFlags, CommandBufferUsageFlags, CommandPoolCreateFlags, CommandPoolCreateInfo, ComponentMapping, ComponentSwizzle, ComputePipelineCreateInfo, DependencyFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSetAllocateInfo, DescriptorSetLayoutBinding, DescriptorSetLayoutBindingBuilder, DescriptorSetLayoutCreateInfo, DescriptorType, DeviceMemory, Extent3D, Fence, FenceCreateFlags, FenceCreateInfo, Format, Handle, ImageAspectFlags, ImageCreateInfo, ImageLayout, ImageMemoryBarrier, ImageSubresourceLayers, ImageSubresourceRange, ImageTiling, ImageType, ImageUsageFlags, ImageViewCreateInfo, ImageViewType, MemoryAllocateInfo, MemoryMapFlags, MemoryPropertyFlags, MemoryRequirements, PhysicalDeviceMemoryProperties, PipelineCache, PipelineCreateFlags, PipelineLayoutCreateInfo, PipelineShaderStageCreateInfo, PipelineStageFlags, Queue, QueueFlags, SampleCountFlags, Semaphore, ShaderStageFlags, SharingMode, SubmitInfo, WriteDescriptorSet};
 use ash::Instance;
 use ash::util::Align;
 use winit::event::{Event, WindowEvent};
@@ -105,173 +105,6 @@ pub fn find_memorytype_index(
         .map(|(index, _memory_type)| index as _)
 }
 
-unsafe fn load_image(buffer: &[u8], device: &RosellaDevice, device_memory_properties: &PhysicalDeviceMemoryProperties) -> (u64, Buffer, (u32, u32)) {
-    let image = image::load_from_memory(buffer)
-        .unwrap()
-        .to_rgba8();
-    let image_dimensions = image.dimensions();
-    let image_data = image.into_raw();
-    let size = (std::mem::size_of::<u8>() * image_data.len()) as u64;
-    let mut buffer_create_info = BufferCreateInfo::builder()
-        .flags(BufferCreateFlags::empty())
-        .size(size)
-        .usage(BufferUsageFlags::STORAGE_BUFFER)
-        .sharing_mode(SharingMode::EXCLUSIVE)
-        .queue_family_indices(Default::default());
-    let image_buffer = device.create_buffer(&buffer_create_info, None).unwrap();
-    let image_buffer_memory_req = device.get_buffer_memory_requirements(image_buffer);
-    let image_buffer_memory_index = find_memorytype_index(
-        &device_memory_properties,
-        MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT,
-    ).expect("Unable to find suitable memorytype for the vertex buffer.");
-
-    let image_buffer_allocate_info = MemoryAllocateInfo {
-        allocation_size: image_buffer_memory_req.size,
-        memory_type_index: image_buffer_memory_index,
-        ..Default::default()
-    };
-    let image_buffer_memory = device
-        .allocate_memory(&image_buffer_allocate_info, None)
-        .unwrap();
-    let image_ptr = device
-        .map_memory(
-            image_buffer_memory,
-            0,
-            image_buffer_memory_req.size,
-            MemoryMapFlags::empty(),
-        )
-        .unwrap();
-    let mut image_slice = Align::new(
-        image_ptr,
-        std::mem::align_of::<u8>() as u64,
-        image_buffer_memory_req.size,
-    );
-    image_slice.copy_from_slice(&image_data);
-    device.unmap_memory(image_buffer_memory);
-    device
-        .bind_buffer_memory(image_buffer, image_buffer_memory, 0)
-        .unwrap();
-
-    (size, image_buffer, image_dimensions)
-}
-
-/* TODO: FINISH. A port of the example code from Ash. It needs to be able to take stuff from the above function and create an Image with it.
-unsafe fn upload_image(width: u32, height: u32, device: RosellaDevice, properties: PhysicalDeviceMemoryProperties) {
-    let texture_create_info = ImageCreateInfo {
-        image_type: ImageType::TYPE_2D,
-        format: Format::R8G8B8A8_UNORM,
-        extent: Extent3D {
-            width,
-            height,
-            depth: 1,
-        },
-        mip_levels: 1,
-        array_layers: 1,
-        samples: SampleCountFlags::TYPE_1,
-        tiling: ImageTiling::OPTIMAL,
-        usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        sharing_mode: SharingMode::EXCLUSIVE,
-        ..Default::default()
-    };
-    let texture_image = device
-        .create_image(&texture_create_info, None)
-        .unwrap();
-    let texture_memory_req = device.get_image_memory_requirements(texture_image);
-    let texture_memory_index = find_memorytype_index(
-        &properties,
-        MemoryPropertyFlags::DEVICE_LOCAL,
-    )
-        .expect("Unable to find suitable memory index for depth image.");
-
-    let texture_allocate_info = MemoryAllocateInfo {
-        allocation_size: texture_memory_req.size,
-        memory_type_index: texture_memory_index,
-        ..Default::default()
-    };
-    let texture_memory = device
-        .allocate_memory(&texture_allocate_info, None)
-        .unwrap();
-    device
-        .bind_image_memory(texture_image, texture_memory, 0)
-        .expect("Unable to bind depth image memory");
-
-    record_submit_commandbuffer(
-        &device,
-        base.setup_command_buffer,
-        base.setup_commands_reuse_fence,
-        base.present_queue,
-        &[],
-        &[],
-        &[],
-        |device, texture_command_buffer| {
-            let texture_barrier = ImageMemoryBarrier {
-                dst_access_mask: AccessFlags::TRANSFER_WRITE,
-                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
-                image: texture_image,
-                subresource_range: ImageSubresourceRange {
-                    aspect_mask: ImageAspectFlags::COLOR,
-                    level_count: 1,
-                    layer_count: 1,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            device.cmd_pipeline_barrier(
-                texture_command_buffer,
-                PipelineStageFlags::BOTTOM_OF_PIPE,
-                PipelineStageFlags::TRANSFER,
-                DependencyFlags::empty(),
-                &[],
-                &[],
-                &[texture_barrier],
-            );
-            let buffer_copy_regions = BufferImageCopy::builder()
-                .image_subresource(
-                    ImageSubresourceLayers::builder()
-                        .aspect_mask(ImageAspectFlags::COLOR)
-                        .layer_count(1)
-                        .build(),
-                )
-                .image_extent(Extent3D {
-                    width,
-                    height,
-                    depth: 1,
-                });
-
-            device.cmd_copy_buffer_to_image(
-                texture_command_buffer,
-                image_buffer,
-                texture_image,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[buffer_copy_regions.build()],
-            );
-            let texture_barrier_end = ImageMemoryBarrier {
-                src_access_mask: AccessFlags::TRANSFER_WRITE,
-                dst_access_mask: AccessFlags::SHADER_READ,
-                old_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
-                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                image: texture_image,
-                subresource_range: ImageSubresourceRange {
-                    aspect_mask: ImageAspectFlags::COLOR,
-                    level_count: 1,
-                    layer_count: 1,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            device.cmd_pipeline_barrier(
-                texture_command_buffer,
-                PipelineStageFlags::TRANSFER,
-                PipelineStageFlags::FRAGMENT_SHADER,
-                DependencyFlags::empty(),
-                &[],
-                &[],
-                &[texture_barrier_end],
-            );
-        },
-    );
-}*/
-
 fn main() {
     let window = RosellaWindow::new("New New Rosella in Rust tm", 800.0, 500.0);
     let mut rosella = setup_rosella(&window);
@@ -297,7 +130,7 @@ fn main() {
     let compute_shader = ComputeShader::new(rosella.device.clone(), include_str!("test_resources/compute.comp").to_string(), ComputeContext {});
 
     let mem_properties = unsafe { rosella.instance.get_physical_device_memory_properties(rosella.device.physical_device) };
-    let image = unsafe { load_image(include_bytes!("test_resources/help_me_16.png"), &rosella.device, &mem_properties) };
+    /*let image = unsafe { load_image(include_bytes!("test_resources/help_me_16.png"), &rosella.device, &mem_properties) };
     let buffer_size = image.0;
 
     let memory_alloc_info = MemoryAllocateInfo::builder()
@@ -315,7 +148,7 @@ fn main() {
 
     // Binding input buffer memory is already done in the image func for the input image.
     let output_buffer = unsafe { rosella.device.create_buffer(&buffer_create_info, ALLOCATION_CALLBACKS) }.expect("Failed to create output buffer!");
-    unsafe { rosella.device.bind_buffer_memory(output_buffer, output_device_memory, 0); }
+    unsafe { rosella.device.bind_buffer_memory(output_buffer, output_device_memory, 0); }*/
 
     let mut bindings = vec![];
 
@@ -375,27 +208,25 @@ fn main() {
         .set_layouts(descriptor_set_layouts.as_slice());
     let descriptor_set = unsafe { rosella.device.allocate_descriptor_sets(&descriptor_set_alloc_info) }.expect("Fail.");
 
-    // Create some image info
-    let tex_image_view_info = ImageViewCreateInfo {
-        view_type: ImageViewType::TYPE_2D,
-        format: texture_create_info.format,
-        components: ComponentMapping {
-            r: ComponentSwizzle::R,
-            g: ComponentSwizzle::G,
-            b: ComponentSwizzle::B,
-            a: ComponentSwizzle::A,
-        },
-        subresource_range: ImageSubresourceRange {
-            aspect_mask: ImageAspectFlags::COLOR,
-            level_count: 1,
-            layer_count: 1,
-            ..Default::default()
-        },
-        image: texture_image,
-        ..Default::default()
-    };
+    // Command Stuff for image stuff
+    let pool_create_info = CommandPoolCreateInfo::builder()
+        .flags(CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+        .queue_family_index(0);
 
-    let input_descriptor_buffer_info = DescriptorImageInfo::builder()
+    let pool = unsafe { rosella.device.create_command_pool(&pool_create_info, None) }.unwrap();
+
+    let command_buffer_allocate_info = CommandBufferAllocateInfo::builder()
+        .command_buffer_count(2)
+        .command_pool(pool)
+        .level(CommandBufferLevel::PRIMARY);
+
+    let command_buffers = unsafe { rosella.device.allocate_command_buffers(&command_buffer_allocate_info) }.unwrap();
+    let setup_cmd_buffer = command_buffers[0];
+
+    // Create some image info
+    // unsafe { upload_image(image.2.0, image.2.1, setup_cmd_buffer, image.1, compute_queue, rosella.device.borrow(), &mem_properties) }
+
+/*    let input_descriptor_buffer_info = DescriptorImageInfo::builder()
         .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
         .image_view(unsafe { rosella.device.create_image_view(&tex_image_view_info, None) }.unwrap())
         .build();
@@ -413,7 +244,7 @@ fn main() {
             .descriptor_type(DescriptorType::STORAGE_IMAGE)
             .image_info(descriptor_image_infos.as_slice()),
         WriteDescriptorSet::builder(),
-    ];
+    ];*/
     //TODO: Finish image support so this is possible.
 
 

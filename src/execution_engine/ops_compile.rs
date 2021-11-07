@@ -39,10 +39,10 @@ pub struct OpsCompiler<'p, 'o> {
 impl<'p, 'o> OpsCompiler<'p, 'o> {
     pub fn new(ops: &'o Vec<OpList>, object_set: &'p PlaceholderObjectSet) -> Self {
         let mut buffer_metadata = Vec::new();
-        buffer_metadata.resize_with(object_set.get_buffer_count(), None);
+        buffer_metadata.resize_with(object_set.get_buffer_count(), || None);
 
         let mut image_metadata = Vec::new();
-        image_metadata.resize_with(object_set.get_image_count(), None);
+        image_metadata.resize_with(object_set.get_image_count(), || None);
 
         Self{
             ops,

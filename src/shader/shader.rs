@@ -27,8 +27,6 @@ pub struct ShaderStage {}
 
 /// Context relating to compute shaders. For example Inputs, Outputs, etc
 pub struct ComputeContext {
-    /// The stage at when the compute shader will be run.
-    pub state: ShaderStage,
 }
 
 /// Shaders & context needed to render a object.
@@ -47,7 +45,7 @@ pub struct ComputeShader {
 
 impl ComputeShader {
     /// Creates a new ComputeShader based on a glsl shader.
-    pub fn new(compute_shader: String, compute_context: ComputeContext) -> ComputeShader {
+    pub fn new(device: Rc<RosellaDevice>, compute_shader: String, compute_context: ComputeContext) -> ComputeShader {
         let mut compiler = Compiler::new().unwrap();
         let mut options = CompileOptions::new().unwrap();
 

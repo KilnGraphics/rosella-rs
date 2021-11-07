@@ -1,11 +1,13 @@
 extern crate ash_window;
 extern crate winit;
 
+use std::borrow::Borrow;
 use std::collections::HashSet;
+use std::ops::BitAnd;
 use std::rc::Rc;
 
 use ash::extensions::khr::Swapchain;
-use ash::vk::{Format, QueueFlags};
+use ash::vk::{BufferCreateFlags, BufferCreateInfo, BufferUsageFlags, Format, MemoryAllocateInfo, MemoryMapFlags, MemoryPropertyFlags, MemoryRequirements, PhysicalDeviceMemoryProperties, QueueFlags, SharingMode};
 use ash::Instance;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
@@ -14,8 +16,8 @@ use rosella_rs::init::device::{ApplicationFeature, DeviceMeta};
 use rosella_rs::init::initialization_registry::InitializationRegistry;
 use rosella_rs::rosella::Rosella;
 use rosella_rs::window::{RosellaSurface, RosellaWindow};
-use rosella_rs::NamedID;
-use rosella_rs::shader::{GraphicsContext, GraphicsShader};
+use rosella_rs::{ALLOCATION_CALLBACKS, NamedID};
+use rosella_rs::shader::{ComputeContext, ComputeShader, GraphicsContext, GraphicsShader};
 use rosella_rs::shader::vertex::{VertexFormat, VertexFormatBuilder, VertexFormatElement};
 use rosella_rs::shader::vertex::data_type;
 
@@ -88,6 +90,20 @@ fn setup_rosella(window: &RosellaWindow) -> Rosella {
     Rosella::new(registry, window, "new_new_rosella_example_scene_1")
 }
 
+pub fn find_memorytype_index(
+    memory_prop: &PhysicalDeviceMemoryProperties,
+    flags: MemoryPropertyFlags,
+) -> Option<u32> {
+    memory_prop.memory_types[..memory_prop.memory_type_count as _]
+        .iter()
+        .enumerate()
+        .find(|(index, memory_type)| {
+            memory_type.property_flags & flags == flags
+        })
+        .map(|(index, _memory_type)| index as _)
+}
+
+
 fn main() {
     let window = RosellaWindow::new("New New Rosella in Rust tm", 1396.0, 752.0);
     let mut rosella = setup_rosella(&window);
@@ -108,6 +124,46 @@ fn main() {
     /// COMPUTE TESTING START.
     /// ======================================
 
+    //TODO: a better way of getting the compute queue.
+    let compute_queue = unsafe { rosella.device.get_device_queue(0, 0) };
+
+    let buffer_length: usize = 4096;
+    let buffer_size: u64 = (buffer_length * 4) as u64;
+
+    let mem_properties = unsafe { rosella.instance.get_physical_device_memory_properties(rosella.device.physical_device) };
+
+    let memory_alloc_info = MemoryAllocateInfo::builder()
+        .allocation_size(buffer_size)
+        .memory_type_index(find_memorytype_index(&mem_properties, MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT).expect("Oh No..."));
+
+    let input_device_memory = unsafe { rosella.device.allocate_memory(&memory_alloc_info, ALLOCATION_CALLBACKS) }.expect("Failed to allocate memory!");
+    let mapped_input_mem = unsafe { rosella.device.map_memory(input_device_memory, 0, buffer_size, MemoryMapFlags::empty()) }.expect("Failed to map memory!");
+
+    let output_device_memory = unsafe { rosella.device.allocate_memory(&memory_alloc_info, ALLOCATION_CALLBACKS) }.expect("Failed to allocate memory!");
+
+    // Fill the memory with 69. Nice
+    let mut i = 0;
+    while i < buffer_size / 4 { // 4 is the size of i32
+        unsafe { *(mapped_input_mem as *mut i8) = 69; }
+        i += 1;
+    }
+
+    unsafe { rosella.device.unmap_memory(input_device_memory) }
+
+    let mut buffer_create_info = BufferCreateInfo::builder()
+        .flags(BufferCreateFlags::empty())
+        .size(buffer_size)
+        .usage(BufferUsageFlags::STORAGE_BUFFER)
+        .sharing_mode(SharingMode::EXCLUSIVE)
+        .queue_family_indices(Default::default());
+
+    let input_buffer = unsafe { rosella.device.create_buffer(&buffer_create_info, ALLOCATION_CALLBACKS) }.expect("Failed to create input buffer!");
+    unsafe { rosella.device.bind_buffer_memory(input_buffer, input_device_memory, 0); }
+
+    let output_buffer = unsafe { rosella.device.create_buffer(&buffer_create_info, ALLOCATION_CALLBACKS) }.expect("Failed to create output buffer!");
+    unsafe { rosella.device.bind_buffer_memory(output_buffer, output_device_memory, 0); }
+
+    ComputeShader::new(rosella.device.clone(), include_str!("test_resources/compute.comp").to_string(), ComputeContext {});
 
     /// COMPUTE TESTING END.
 

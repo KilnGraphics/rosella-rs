@@ -83,6 +83,7 @@ pub struct DeviceMeta {
 
 pub struct RosellaDevice {
     device: Device,
+    pub physical_device: PhysicalDevice,
 }
 
 pub fn create_device(instance: &Instance, registry: InitializationRegistry, surface: &RosellaSurface) -> RosellaDevice {
@@ -194,7 +195,7 @@ impl DeviceMeta {
         self.fulfill_queue_requests(&vk_device);
         drop(queue_mappings);
 
-        RosellaDevice { device: vk_device }
+        RosellaDevice { device: vk_device, physical_device: self.physical_device }
     }
 
     fn generate_queue_mappings(&mut self) -> Vec<(DeviceQueueCreateInfo, Option<Vec<f32>>)> {

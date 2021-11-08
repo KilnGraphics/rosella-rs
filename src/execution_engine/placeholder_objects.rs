@@ -481,6 +481,10 @@ impl PlaceholderObjectSet {
     }
 }
 
+pub struct SpecializationSet {
+
+}
+
 mod test {
     use super::*;
 

@@ -5,6 +5,12 @@ use ash::vk;
 use ash::vk::TimelineSemaphoreSubmitInfoBuilder;
 use crate::execution_engine::*;
 
+#[non_exhaustive]
+pub enum ExecutionError {
+    PoisonedQueueLock,
+    SubmitFailed(vk::Result),
+}
+
 pub enum WaitOperation {
     BinarySemaphore(vk::Semaphore),
     TimelineSemaphore(vk::Semaphore, u64),
@@ -53,7 +59,7 @@ impl Submission {
         }
     }
 
-    pub fn submit(&mut self, wait_ops: &Vec<WaitOperation>, signal_ops: &Vec<SignalOperation>, submit_fn: vk::PFN_vkQueueSubmit2KHR) -> Result<(), vk::Result> {
+    pub fn submit(&mut self, wait_ops: &Vec<WaitOperation>, signal_ops: &Vec<SignalOperation>, submit_fn: vk::PFN_vkQueueSubmit2KHR) -> Result<(), ExecutionError> {
         self.update_semaphores(wait_ops, signal_ops);
 
         let submit_info = vk::SubmitInfo2KHR::builder()
@@ -61,10 +67,10 @@ impl Submission {
             .command_buffer_infos(&self.command_buffers)
             .signal_semaphore_infos(&self.signal_semaphores);
 
-        let queue = self.queue.lock().ok().ok_or("Poisoned queue lock")?;
-        match submit_fn(*queue, 1, &submit_info.build(), vk::Fence::null()) {
+        let queue = self.queue.lock().ok().ok_or(ExecutionError::PoisonedQueueLock)?;
+        match unsafe{ submit_fn(*queue, 1, &submit_info.build(), vk::Fence::null()) } {
             vk::Result::SUCCESS => Ok(()),
-            err => Err(err)
+            err => Err(ExecutionError::SubmitFailed(err))
         }
     }
 }

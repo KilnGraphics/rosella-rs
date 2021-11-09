@@ -7,6 +7,7 @@ use crate::execution_engine::*;
 
 #[non_exhaustive]
 pub enum ExecutionError {
+    AccessError,
     PoisonedQueueLock,
     SubmitFailed(vk::Result),
 }
@@ -81,8 +82,33 @@ pub struct Executable {
 }
 
 impl Executable {
-    pub fn submit(&mut self) -> Result<(), &'static str> {
-        let access_info = self.access_groups.enqueue_access()?;
-        Err("")
+    fn make_wait_ops(accesses: &Vec<memory::AccessInfo>) -> Vec<WaitOperation> {
+        let mut result = Vec::with_capacity(accesses.len());
+        for access in accesses {
+            result.push(WaitOperation::TimelineSemaphore(access.semaphore, access.base_access));
+        }
+
+        result
+    }
+
+    fn make_signal_ops(accesses: &Vec<memory::AccessInfo>) -> Vec<SignalOperation> {
+        let mut result = Vec::with_capacity(accesses.len());
+        for access in accesses {
+            result.push(SignalOperation::TimelineSemaphore(access.semaphore, access.base_access));
+        }
+
+        result
+    }
+
+    pub fn submit(&mut self, submit_fn: vk::PFN_vkQueueSubmit2KHR) -> Result<(), ExecutionError> {
+        let access_info = self.access_groups.enqueue_access().map_err(|_| ExecutionError::AccessError)?;
+        let wait_ops = Self::make_wait_ops(&access_info);
+        let signal_ops = Self::make_signal_ops(&access_info);
+
+        for submission in &mut self.submissions {
+            submission.submit(&wait_ops, &signal_ops, submit_fn)?;
+        }
+
+        Ok(())
     }
 }

@@ -7,7 +7,7 @@ use crate::execution_engine::*;
 
 #[non_exhaustive]
 pub enum ExecutionError {
-    AccessError,
+    AccessError(&'static str),
     PoisonedQueueLock,
     SubmitFailed(vk::Result),
 }
@@ -101,7 +101,7 @@ impl Executable {
     }
 
     pub fn submit(&mut self, submit_fn: vk::PFN_vkQueueSubmit2KHR) -> Result<(), ExecutionError> {
-        let access_info = self.access_groups.enqueue_access().map_err(|_| ExecutionError::AccessError)?;
+        let access_info = self.access_groups.enqueue_access().map_err(|msg| ExecutionError::AccessError(msg))?;
         let wait_ops = Self::make_wait_ops(&access_info);
         let signal_ops = Self::make_signal_ops(&access_info);
 

@@ -2,9 +2,10 @@
 //! The IR is designed to be a direct mapping to vulkan commands with only placeholders for
 //! specializable resources and external synchronization for them left unresolved.
 
+use std::collections::HashMap;
 use std::sync::{Arc, MutexGuard};
 use ash::vk;
-use ash::vk::Queue;
+use ash::vk::{Handle, Queue};
 use crate::execution_engine::placeholder_objects::*;
 use crate::rosella::DeviceContext;
 
@@ -36,19 +37,81 @@ impl<'a> QueueRecorder<'a> {
     }
 }
 
+pub struct HandleMap {
+    map: HashMap<GenericId, u64>,
+}
+
+impl HandleMap {
+    pub fn get_raw_map(&self) -> &HashMap<GenericId, u64> {
+        &self.map
+    }
+
+    pub fn get_raw_map_mut(&mut self) -> &mut HashMap<GenericId, u64> {
+        &mut self.map
+    }
+
+    pub fn get_buffer(&self, id: BufferId) -> Option<vk::Buffer> {
+        self.map.get(&id.as_generic()).map(|v| vk::Buffer::from_raw(*v))
+    }
+
+    pub fn get_buffer_view(&self, id: BufferViewId) -> Option<vk::BufferView> {
+        self.map.get(&id.as_generic()).map(|v| vk::BufferView::from_raw(*v))
+    }
+
+    pub fn get_image(&self, id: ImageId) -> Option<vk::Image> {
+        self.map.get(&id.as_generic()).map(|v| vk::Image::from_raw(*v))
+    }
+
+    pub fn get_image_view(&self, id: ImageViewId) -> Option<vk::ImageView> {
+        self.map.get(&id.as_generic()).map(|v| vk::ImageView::from_raw(*v))
+    }
+}
+
 pub trait Command {
-    fn record(&self, recorder: &mut QueueRecorder, specialization_set: &SpecializationSet) -> Result<(), &'static str>;
+    fn record(&self, recorder: &mut QueueRecorder, handle_map: &HandleMap) -> Result<(), &'static str>;
 }
 
 pub struct CommandList {
     commands: Vec<Box<dyn Command>>,
+    queue_family: u32,
+    wait_mapping: Box<[usize]>,
+    signal_mapping: Box<[usize]>,
 }
 
 impl CommandList {
-    pub fn record<'a>(&self, recorder: &mut QueueRecorder<'a>, specialization_set: &SpecializationSet) -> Result<(), &'static str> {
+    pub fn get_queue_family(&self) -> u32 {
+        self.queue_family
+    }
+
+    pub fn get_wait_mapping(&self) -> &Box<[usize]> {
+        &self.wait_mapping
+    }
+
+    pub fn get_signal_mapping(&self) -> &Box<[usize]> {
+        &self.signal_mapping
+    }
+
+    pub fn record<'a>(&self, recorder: &mut QueueRecorder<'a>, handle_map: &HandleMap) -> Result<(), &'static str> {
         for command in &self.commands {
-            command.record(recorder, specialization_set)?;
+            command.record(recorder, handle_map)?;
         }
         Ok(())
+    }
+}
+
+pub enum SemaphoreOpInfo {
+    BinarySemaphore(),
+    TimelineSemaphore(u64),
+}
+
+pub struct UnspecializedExecutable {
+    commands: Vec<CommandList>,
+    semaphore_wait_ops: Vec<SemaphoreOpInfo>,
+    semaphore_signal_ops: Vec<SemaphoreOpInfo>,
+}
+
+impl UnspecializedExecutable {
+    pub fn specialize(&self, specialization_set: &SpecializationSet) -> Result<super::executable::Executable, &'static str> {
+        Err("")
     }
 }

@@ -69,10 +69,9 @@ impl Submission {
             .signal_semaphore_infos(&self.signal_semaphores);
 
         let queue = self.queue.lock().ok().ok_or(ExecutionError::PoisonedQueueLock)?;
-        match unsafe{ device(*queue, 1, &submit_info.build(), vk::Fence::null()) } {
-            vk::Result::SUCCESS => Ok(()),
-            err => Err(ExecutionError::SubmitFailed(err))
-        }
+        unsafe{
+            device.get_synchronization_2().queue_submit2(*queue, std::slice::from_ref(&submit_info.build()), vk::Fence::null())
+        }.map_err(|err| ExecutionError::SubmitFailed(err))
     }
 }
 

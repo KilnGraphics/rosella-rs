@@ -60,7 +60,7 @@ impl Submission {
         }
     }
 
-    pub fn submit(&mut self, wait_ops: &Vec<WaitOperation>, signal_ops: &Vec<SignalOperation>, submit_fn: vk::PFN_vkQueueSubmit2KHR) -> Result<(), ExecutionError> {
+    pub fn submit(&mut self, wait_ops: &Vec<WaitOperation>, signal_ops: &Vec<SignalOperation>, device: &crate::rosella::DeviceContext) -> Result<(), ExecutionError> {
         self.update_semaphores(wait_ops, signal_ops);
 
         let submit_info = vk::SubmitInfo2KHR::builder()
@@ -69,7 +69,7 @@ impl Submission {
             .signal_semaphore_infos(&self.signal_semaphores);
 
         let queue = self.queue.lock().ok().ok_or(ExecutionError::PoisonedQueueLock)?;
-        match unsafe{ submit_fn(*queue, 1, &submit_info.build(), vk::Fence::null()) } {
+        match unsafe{ device(*queue, 1, &submit_info.build(), vk::Fence::null()) } {
             vk::Result::SUCCESS => Ok(()),
             err => Err(ExecutionError::SubmitFailed(err))
         }
@@ -77,6 +77,7 @@ impl Submission {
 }
 
 pub struct Executable {
+    device: Arc<crate::rosella::DeviceContext>,
     submissions: Vec<Submission>,
     access_groups: memory::AccessGroupSet,
 }
@@ -100,13 +101,13 @@ impl Executable {
         result
     }
 
-    pub fn submit(&mut self, submit_fn: vk::PFN_vkQueueSubmit2KHR) -> Result<(), ExecutionError> {
+    pub fn submit(&mut self) -> Result<(), ExecutionError> {
         let access_info = self.access_groups.enqueue_access().map_err(|msg| ExecutionError::AccessError(msg))?;
         let wait_ops = Self::make_wait_ops(&access_info);
         let signal_ops = Self::make_signal_ops(&access_info);
 
         for submission in &mut self.submissions {
-            submission.submit(&wait_ops, &signal_ops, submit_fn)?;
+            submission.submit(&wait_ops, &signal_ops, self.device.as_ref())?;
         }
 
         Ok(())

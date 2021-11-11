@@ -8,9 +8,11 @@
 //! Fully defined objects on the other hand will be fixed after the ops compile stage. They can either
 //! be dynamically allocated by the ops compiler or be set to some external object.
 
+use std::collections::HashMap;
 use ash::vk;
 
 use std::fmt::{Debug, Formatter};
+use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::objects::*;
@@ -133,6 +135,13 @@ impl<const TYPE: u8> Debug for ObjectId<TYPE> {
             .field("local_id", &self.get_local_id())
             .field("global_id", &self.get_global_id())
             .finish()
+    }
+}
+
+
+impl<const TYPE: u8> Hash for ObjectId<TYPE> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
     }
 }
 
@@ -482,7 +491,8 @@ impl PlaceholderObjectSet {
 }
 
 pub struct SpecializationSet {
-
+    buffers: HashMap<BufferId, vk::Buffer>,
+    images: HashMap<ImageId, vk::Image>,
 }
 
 mod test {

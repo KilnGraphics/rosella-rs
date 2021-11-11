@@ -19,8 +19,8 @@ impl AccessGroup {
 }
 
 pub struct AccessInfo {
-    semaphore: ash::vk::Semaphore,
-    base_access: u64,
+    pub semaphore: ash::vk::Semaphore,
+    pub base_access: u64,
 }
 
 type AccessGroupRef = Arc<Mutex<AccessGroup>>;

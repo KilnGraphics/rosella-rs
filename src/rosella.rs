@@ -1,8 +1,6 @@
-use std::rc::Rc;
 use std::sync::Arc;
 use crate::ALLOCATION_CALLBACKS;
-use ash::{Entry, Instance};
-use ash::vk;
+use ash::{Entry};
 
 use crate::init::device::{create_device};
 use crate::init::initialization_registry::InitializationRegistry;
@@ -87,6 +85,7 @@ impl Drop for InstanceContext {
 }
 
 pub struct DeviceContext {
+    #[allow(unused)]
     instance: Arc<InstanceContext>,
     device: ash::Device,
     synchronization_2: ash::extensions::khr::Synchronization2,

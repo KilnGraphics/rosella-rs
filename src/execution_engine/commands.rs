@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, MutexGuard};
 use ash::vk;
 use ash::vk::{Handle, Queue};
+use crate::execution_engine::executable::ExecutableCommons;
 use crate::execution_engine::placeholder_objects::*;
 use crate::rosella::DeviceContext;
 
@@ -104,10 +105,34 @@ pub enum SemaphoreOpInfo {
     TimelineSemaphore(u64),
 }
 
+pub struct ResourceSpecializationInfo {
+    specialized: HashMap<GenericId, u64>,
+    pending_buffers: Box<[BufferId]>,
+    pending_images: Box<[ImageId]>,
+}
+
+impl ResourceSpecializationInfo {
+    pub fn specialize_resources(&self, specialization_set: &SpecializationSet) -> Result<HashMap<GenericId, u64>, &'static str> {
+        let mut result = self.specialized.clone();
+        for id in self.pending_buffers.iter() {
+            let buffer = specialization_set.get_buffer(*id).ok_or("Missing buffer in specialization set")?;
+            result.insert(id.as_generic(), buffer.as_raw());
+        }
+        for id in self.pending_images.iter() {
+            let image = specialization_set.get_image(*id).ok_or("Missing image in specialization set")?;
+            result.insert(id.as_generic(), image.as_raw());
+        }
+
+        Ok(result)
+    }
+}
+
 pub struct UnspecializedExecutable {
+    commons: Arc<ExecutableCommons>,
     commands: Vec<CommandList>,
     semaphore_wait_ops: Vec<SemaphoreOpInfo>,
     semaphore_signal_ops: Vec<SemaphoreOpInfo>,
+    specialization_info: ResourceSpecializationInfo,
 }
 
 impl UnspecializedExecutable {

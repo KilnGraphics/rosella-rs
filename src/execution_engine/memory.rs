@@ -30,7 +30,7 @@ pub struct AccessGroupSet {
 }
 
 impl AccessGroupSet {
-    fn lock_groups(&mut self) -> Result<Vec<MutexGuard<AccessGroup>>, PoisonError<MutexGuard<AccessGroup>>> {
+    fn lock_groups(&self) -> Result<Vec<MutexGuard<AccessGroup>>, PoisonError<MutexGuard<AccessGroup>>> {
         let mut guards: Vec<MutexGuard<AccessGroup>> = Vec::with_capacity(self.groups.len());
         // Groups **must** be ordered to avoid deadlocking
         for reference in &self.groups {
@@ -43,7 +43,7 @@ impl AccessGroupSet {
         Ok(guards)
     }
 
-    pub fn enqueue_access(&mut self) -> Result<Vec<AccessInfo>, &'static str> {
+    pub fn enqueue_access(&self) -> Result<Vec<AccessInfo>, &'static str> {
         let len = self.groups.len();
         let mut guards = self.lock_groups().ok().ok_or("Poisoned lock in group list")?;
         let mut accesses = Vec::with_capacity(len);

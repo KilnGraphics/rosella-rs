@@ -8,7 +8,8 @@ use crate::execution_engine::*;
 #[non_exhaustive]
 pub enum ExecutionError {
     AccessError(&'static str),
-    PoisonedQueueLock,
+    PoisonedQueueMutex,
+    PoisonedExecutableMutex,
     SubmitFailed(vk::Result),
 }
 
@@ -68,20 +69,20 @@ impl Submission {
             .command_buffer_infos(&self.command_buffers)
             .signal_semaphore_infos(&self.signal_semaphores);
 
-        let queue = engine.get_queues().get(self.queue_family as usize).unwrap().access_queue().lock().ok().ok_or(ExecutionError::PoisonedQueueLock)?;
+        let queue = engine.get_queues().get(self.queue_family as usize).unwrap().access_queue().lock().ok().ok_or(ExecutionError::PoisonedQueueMutex)?;
         unsafe{
             engine.get_device().get_synchronization_2().queue_submit2(*queue, std::slice::from_ref(&submit_info.build()), vk::Fence::null())
         }.map_err(|err| ExecutionError::SubmitFailed(err))
     }
 }
 
-pub struct Executable {
-    engine: Arc<super::ExecutionEngine>,
+pub struct ExecutableInternal {
+    common: Arc<ExecutableCommons>,
     submissions: Vec<Submission>,
     access_groups: memory::AccessGroupSet,
 }
 
-impl Executable {
+impl ExecutableInternal {
     fn make_wait_ops(accesses: &Vec<memory::AccessInfo>) -> Vec<WaitOperation> {
         let mut result = Vec::with_capacity(accesses.len());
         for access in accesses {
@@ -100,15 +101,37 @@ impl Executable {
         result
     }
 
-    pub fn submit(&mut self) -> Result<(), ExecutionError> {
+    fn submit(&mut self) -> Result<(), ExecutionError> {
+        let engine = self.common.get_engine();
+
         let access_info = self.access_groups.enqueue_access().map_err(|msg| ExecutionError::AccessError(msg))?;
         let wait_ops = Self::make_wait_ops(&access_info);
         let signal_ops = Self::make_signal_ops(&access_info);
 
         for submission in &mut self.submissions {
-            submission.submit(&wait_ops, &signal_ops, self.engine.as_ref())?;
+            submission.submit(&wait_ops, &signal_ops, engine)?;
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct Executable(Arc<Mutex<ExecutableInternal>>);
+
+impl Executable {
+    pub fn submit(&mut self) -> Result<(), ExecutionError> {
+        let mut exec = self.0.lock().map_err(|_| ExecutionError::PoisonedExecutableMutex)?;
+        exec.submit()
+    }
+}
+
+pub struct ExecutableCommons {
+    engine: Arc<super::ExecutionEngine>,
+}
+
+impl ExecutableCommons {
+    fn get_engine(&self) -> &super::ExecutionEngine {
+        self.engine.as_ref()
     }
 }

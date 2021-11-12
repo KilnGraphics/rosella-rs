@@ -495,6 +495,24 @@ pub struct SpecializationSet {
     images: HashMap<ImageId, vk::Image>,
 }
 
+impl SpecializationSet {
+    pub fn set_buffer(&mut self, id: BufferId, buffer: vk::Buffer) {
+        self.buffers.insert(id, buffer);
+    }
+
+    pub fn set_image(&mut self, id: ImageId, image: vk::Image) {
+        self.images.insert(id, image);
+    }
+
+    pub fn get_buffer(&self, id: BufferId) -> Option<vk::Buffer> {
+        self.buffers.get(&id).map(|v| *v)
+    }
+
+    pub fn get_image(&self, id: ImageId) -> Option<vk::Image> {
+        self.images.get(&id).map(|v| *v)
+    }
+}
+
 mod test {
     use super::*;
 

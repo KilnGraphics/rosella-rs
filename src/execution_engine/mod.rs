@@ -27,7 +27,7 @@ impl ExecutionEngine {
         command_pools.resize_with(queues.len(), || Mutex::new(vk::CommandPool::null()));
 
         for (i, queue) in queues.iter().enumerate() {
-            if i != queue.get_queue_family_index() {
+            if i != queue.get_queue_family_index() as usize {
                 panic!("Yes this is not very good TODO fix this") // TODO fix this
             }
 

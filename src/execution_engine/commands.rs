@@ -6,23 +6,24 @@ use std::sync::{Arc, MutexGuard};
 use ash::vk;
 use ash::vk::Queue;
 use crate::execution_engine::placeholder_objects::*;
+use crate::rosella::DeviceContext;
 
 pub struct QueueRecorder<'a> {
-    device: &'a Arc<ash::Device>,
+    device: &'a DeviceContext,
     command_buffer: vk::CommandBuffer,
 }
 
 impl<'a> QueueRecorder<'a> {
-    pub fn begin(device: &'a Arc<ash::Device>, command_buffer: vk::CommandBuffer) -> Result<Self, vk::Result> {
+    pub fn begin(device: &'a DeviceContext, command_buffer: vk::CommandBuffer) -> Result<Self, vk::Result> {
         let begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::empty());
 
-        unsafe{ device.begin_command_buffer(command_buffer, &begin_info.build())? };
+        unsafe{ device.vk().begin_command_buffer(command_buffer, &begin_info.build())? };
         Ok(Self{ device, command_buffer })
     }
 
-    pub fn get_device(&self) -> &Arc<ash::Device> {
-        &self.device
+    pub fn get_device(&self) -> &DeviceContext {
+        self.device
     }
 
     pub fn get_command_buffer(&self) -> vk::CommandBuffer {
@@ -30,7 +31,7 @@ impl<'a> QueueRecorder<'a> {
     }
 
     pub fn end(self) -> Result<vk::CommandBuffer, vk::Result> {
-        unsafe{ self.device.end_command_buffer(self.command_buffer)? };
+        unsafe{ self.device.vk().end_command_buffer(self.command_buffer)? };
         Ok(self.command_buffer)
     }
 }

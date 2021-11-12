@@ -20,16 +20,6 @@ pub struct VulkanQueue {
     family: i32,
 }
 
-impl VulkanQueue {
-    pub fn get_queue(&self) -> &Mutex<Queue> {
-        &self.queue
-    }
-
-    pub fn get_queue_family_index(&self) -> u32 {
-        self.family as u32
-    }
-}
-
 struct QueueRequest {
     requested_family: i32,
     assigned_index: i32,
@@ -295,6 +285,10 @@ impl QueueRequest {
 }
 
 impl VulkanQueue {
+    pub fn get_queue_family_index(&self) -> u32 {
+        self.family as u32
+    }
+
     pub fn access_queue(&self) -> &Mutex<Queue> {
         &self.queue
     }

@@ -42,6 +42,10 @@ impl ExecutionEngine {
         Ok(Self{ device, queues, command_pools: command_pools.into_boxed_slice() })
     }
 
+    fn get_device(&self) -> &DeviceContext {
+        self.device.as_ref()
+    }
+
     fn get_queues(&self) -> &[Arc<VulkanQueue>] {
         self.queues.as_ref()
     }

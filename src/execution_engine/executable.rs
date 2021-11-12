@@ -23,7 +23,7 @@ pub enum SignalOperation {
 }
 
 pub struct Submission {
-    queue: Arc<Mutex<vk::Queue>>,
+    queue_family: u32,
     command_buffers: Box<[vk::CommandBufferSubmitInfoKHR]>,
     wait_mapping: Box<[usize]>,
     wait_semaphores: Box<[vk::SemaphoreSubmitInfoKHR]>,
@@ -60,7 +60,7 @@ impl Submission {
         }
     }
 
-    pub fn submit(&mut self, wait_ops: &Vec<WaitOperation>, signal_ops: &Vec<SignalOperation>, device: &crate::rosella::DeviceContext) -> Result<(), ExecutionError> {
+    pub fn submit(&mut self, wait_ops: &Vec<WaitOperation>, signal_ops: &Vec<SignalOperation>, engine: &super::ExecutionEngine) -> Result<(), ExecutionError> {
         self.update_semaphores(wait_ops, signal_ops);
 
         let submit_info = vk::SubmitInfo2KHR::builder()
@@ -68,15 +68,15 @@ impl Submission {
             .command_buffer_infos(&self.command_buffers)
             .signal_semaphore_infos(&self.signal_semaphores);
 
-        let queue = self.queue.lock().ok().ok_or(ExecutionError::PoisonedQueueLock)?;
+        let queue = engine.get_queues().get(self.queue_family as usize).unwrap().access_queue().lock().ok().ok_or(ExecutionError::PoisonedQueueLock)?;
         unsafe{
-            device.get_synchronization_2().queue_submit2(*queue, std::slice::from_ref(&submit_info.build()), vk::Fence::null())
+            engine.get_device().get_synchronization_2().queue_submit2(*queue, std::slice::from_ref(&submit_info.build()), vk::Fence::null())
         }.map_err(|err| ExecutionError::SubmitFailed(err))
     }
 }
 
 pub struct Executable {
-    device: Arc<crate::rosella::DeviceContext>,
+    engine: Arc<super::ExecutionEngine>,
     submissions: Vec<Submission>,
     access_groups: memory::AccessGroupSet,
 }
@@ -106,7 +106,7 @@ impl Executable {
         let signal_ops = Self::make_signal_ops(&access_info);
 
         for submission in &mut self.submissions {
-            submission.submit(&wait_ops, &signal_ops, self.device.as_ref())?;
+            submission.submit(&wait_ops, &signal_ops, self.engine.as_ref())?;
         }
 
         Ok(())

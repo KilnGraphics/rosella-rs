@@ -106,7 +106,7 @@ impl GraphicsShader {
                 &ShaderModuleCreateInfo::builder().code(
                     compiler
                         .compile_into_spirv(&fragment_shader, ShaderKind::Fragment, "fragment.glsl", "main", Some(&options))
-                        .expect("Failed to compile the FragmentShader.")
+                        .expect("Failed to compile the Fragment Shader.")
                         .as_binary(),
                 ),
                 ALLOCATION_CALLBACKS,

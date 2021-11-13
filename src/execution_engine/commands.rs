@@ -8,6 +8,7 @@ use ash::vk;
 use ash::vk::{Handle, Queue};
 use crate::execution_engine::executable::ExecutableCommons;
 use crate::execution_engine::placeholder_objects::*;
+use crate::objects::id::{BufferId, BufferViewId, GenericId, ImageId, ImageViewId};
 use crate::rosella::DeviceContext;
 
 pub struct QueueRecorder<'a> {

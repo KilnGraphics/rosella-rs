@@ -1,6 +1,7 @@
 pub mod format;
 pub mod image;
 pub mod buffer;
+pub mod id;
 
 pub use format::Format;
 

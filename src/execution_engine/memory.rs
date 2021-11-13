@@ -3,18 +3,47 @@ use std::ops::Mul;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard, PoisonError, TryLockError, TryLockResult};
 use std::thread;
 use std::time::Duration;
+use crate::rosella::DeviceContext;
+
+use ash::vk;
 
 pub struct AccessGroup {
-    semaphore: ash::vk::Semaphore,
-    last_access: u64,
+    device: Arc<DeviceContext>,
+    semaphore: vk::Semaphore,
+    last_access: Mutex<u64>,
 }
 
 impl AccessGroup {
-    pub fn enqueue_access(&mut self, count: u64) -> AccessInfo {
-        let base_access = self.last_access;
-        self.last_access += count;
+    fn lock_access(&self) -> Result<AccessGuard, &AccessGroup> {
+        let guard = self.last_access.lock().map_err(|_| self)?;
 
-        AccessInfo{ semaphore: self.semaphore, base_access }
+        Ok(AccessGuard{ guard, semaphore: self.semaphore })
+    }
+
+    pub fn get_counter_value(&self) -> Result<u64, vk::Result> {
+        unsafe {
+            self.device.get_timeline_semaphore().get_semaphore_counter_value(self.device.vk().handle(), self.semaphore)
+        }
+    }
+}
+
+impl Drop for AccessGroup {
+    fn drop(&mut self) {
+        unsafe{ self.device.vk().destroy_semaphore(self.semaphore, None) }
+    }
+}
+
+struct AccessGuard<'a> {
+    guard: MutexGuard<'a, u64>,
+    semaphore: vk::Semaphore,
+}
+
+impl<'a> AccessGuard<'a> {
+    pub fn enqueue_access(&mut self, count: u64) -> AccessInfo {
+        let base = *self.guard;
+        *self.guard += count;
+
+        AccessInfo{ semaphore: self.semaphore, base_access: base }
     }
 }
 
@@ -23,20 +52,18 @@ pub struct AccessInfo {
     pub base_access: u64,
 }
 
-type AccessGroupRef = Arc<Mutex<AccessGroup>>;
-
 pub struct AccessGroupSet {
-    groups: Vec<AccessGroupRef>,
+    groups: Vec<Arc<AccessGroup>>,
 }
 
 impl AccessGroupSet {
-    fn lock_groups(&self) -> Result<Vec<MutexGuard<AccessGroup>>, PoisonError<MutexGuard<AccessGroup>>> {
-        let mut guards: Vec<MutexGuard<AccessGroup>> = Vec::with_capacity(self.groups.len());
+    fn lock_groups(&self) -> Result<Vec<AccessGuard>, &'static str> {
+        let mut guards: Vec<AccessGuard> = Vec::with_capacity(self.groups.len());
         // Groups **must** be ordered to avoid deadlocking
         for reference in &self.groups {
-            match reference.lock() {
+            match reference.lock_access() {
                 Ok(guard) => guards.push(guard),
-                Err(err) => return Err(err),
+                Err(_) => panic!("Poisoned access group"),
             }
         }
 

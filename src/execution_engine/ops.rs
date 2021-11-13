@@ -5,7 +5,7 @@
 
 use std::any::Any;
 use std::marker::PhantomData;
-use crate::execution_engine::placeholder_objects::GenericId;
+use crate::objects::id::GenericId;
 
 pub trait ObjectUsageRegistry {
     fn register_object_usage(&mut self, object: GenericId) -> Result<(), &'static str>;

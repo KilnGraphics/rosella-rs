@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use crate::execution_engine::placeholder_objects::*;
 use crate::execution_engine::ops::{ObjectUsageRegistry, OpList};
+use crate::objects::id::{BufferId, BufferViewId, GenericId, ImageId, ImageViewId, ObjectType};
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord)]
 struct OpIndex {

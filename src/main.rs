@@ -106,7 +106,7 @@ pub fn find_memorytype_index(
 }
 
 fn main() {
-    let window = RosellaWindow::new("Test", 800.0, 500.0);
+    let window = RosellaWindow::new("Rosella Tests", 800.0, 500.0);
     let mut rosella = setup_rosella(&window);
 
     // Application Setup usually goes here. Anything in the window loop is either for closing or for looping.

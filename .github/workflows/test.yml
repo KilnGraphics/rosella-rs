@@ -5,7 +5,7 @@ name: Test Rosella
 jobs:
   check:
     name: Check
-    runs-on: rpi-4
+    runs-on: VK12
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2

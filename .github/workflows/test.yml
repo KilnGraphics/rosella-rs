@@ -1,11 +1,11 @@
 on: [ push, pull_request ]
 
-name: Test Code
+name: Test Rosella
 
 jobs:
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: rpi-4
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -21,3 +21,8 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test

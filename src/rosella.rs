@@ -1,6 +1,7 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use crate::ALLOCATION_CALLBACKS;
-use ash::{Entry};
+use ash::{Device, Entry, Instance};
 
 use crate::init::device::{create_device};
 use crate::init::initialization_registry::InitializationRegistry;
@@ -62,6 +63,14 @@ pub struct InstanceContext {
     instance: ash::Instance,
 }
 
+impl Deref for InstanceContext {
+    type Target = Instance;
+
+    fn deref(&self) -> &Self::Target {
+        &self.instance
+    }
+}
+
 impl InstanceContext {
     fn new(entry: ash::Entry, instance: ash::Instance) -> Self {
         Self{ entry, instance }
@@ -90,6 +99,14 @@ pub struct DeviceContext {
     device: ash::Device,
     synchronization_2: ash::extensions::khr::Synchronization2,
     timeline_semaphore: ash::extensions::khr::TimelineSemaphore,
+}
+
+impl Deref for DeviceContext {
+    type Target = Device;
+
+    fn deref(&self) -> &Self::Target {
+        &self.device
+    }
 }
 
 impl DeviceContext {

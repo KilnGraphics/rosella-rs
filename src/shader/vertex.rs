@@ -44,7 +44,7 @@ impl VertexFormatBuilder {
         self
     }
 
-    pub fn build(mut self) -> VertexFormat {
+    pub fn build(self) -> VertexFormat {
         VertexFormat::new(self.elements)
     }
 }

@@ -1,10 +1,9 @@
 use crate::shader::vertex::VertexFormat;
 use crate::ALLOCATION_CALLBACKS;
 use ash::vk::{ShaderModule, ShaderModuleCreateInfo};
-use ash::{Device, Entry};
+use ash::Entry;
 use shaderc::{CompileOptions, Compiler, ShaderKind, TargetEnv};
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::Arc;
 use crate::rosella::DeviceContext;
 
@@ -46,7 +45,7 @@ pub struct ComputeShader {
 
 impl ComputeShader {
     /// Creates a new ComputeShader based on a glsl shader.
-    pub fn new(device: Rc<RosellaDevice>, compute_shader: String, compute_context: ComputeContext) -> ComputeShader {
+    pub fn new(device: Arc<DeviceContext>, compute_shader: String, compute_context: ComputeContext) -> ComputeShader {
         let mut compiler = Compiler::new().unwrap();
         let mut options = CompileOptions::new().unwrap();
 

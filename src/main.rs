@@ -1,26 +1,23 @@
 extern crate ash_window;
 extern crate winit;
 
-use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::ffi::CString;
-use std::ops::BitAnd;
 use std::rc::Rc;
 
 use ash::extensions::khr::Swapchain;
-use ash::vk::{AccessFlags, Buffer, BufferCreateFlags, BufferCreateInfo, BufferImageCopy, BufferUsageFlags, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferResetFlags, CommandBufferUsageFlags, CommandPoolCreateFlags, CommandPoolCreateInfo, ComponentMapping, ComponentSwizzle, ComputePipelineCreateInfo, DependencyFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSetAllocateInfo, DescriptorSetLayoutBinding, DescriptorSetLayoutBindingBuilder, DescriptorSetLayoutCreateInfo, DescriptorType, DeviceMemory, Extent3D, Fence, FenceCreateFlags, FenceCreateInfo, Format, Handle, ImageAspectFlags, ImageCreateInfo, ImageLayout, ImageMemoryBarrier, ImageSubresourceLayers, ImageSubresourceRange, ImageTiling, ImageType, ImageUsageFlags, ImageViewCreateInfo, ImageViewType, MemoryAllocateInfo, MemoryMapFlags, MemoryPropertyFlags, MemoryRequirements, PhysicalDeviceMemoryProperties, PipelineCache, PipelineCreateFlags, PipelineLayoutCreateInfo, PipelineShaderStageCreateInfo, PipelineStageFlags, Queue, QueueFlags, SampleCountFlags, Semaphore, ShaderStageFlags, SharingMode, SubmitInfo, WriteDescriptorSet};
+use ash::vk::{CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferResetFlags, CommandBufferUsageFlags, CommandPoolCreateFlags, CommandPoolCreateInfo, ComponentMapping, ComponentSwizzle, ComputePipelineCreateInfo, DependencyFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSetAllocateInfo, DescriptorSetLayoutBinding, DescriptorSetLayoutBindingBuilder, DescriptorSetLayoutCreateInfo, DescriptorType, DeviceMemory, Extent3D, Fence, FenceCreateFlags, FenceCreateInfo, Format, Handle, ImageAspectFlags, ImageCreateInfo, ImageLayout, ImageMemoryBarrier, ImageSubresourceLayers, ImageSubresourceRange, ImageTiling, ImageType, ImageUsageFlags, ImageViewCreateInfo, ImageViewType, MemoryAllocateInfo, MemoryMapFlags, MemoryPropertyFlags, MemoryRequirements, PhysicalDeviceMemoryProperties, PipelineCache, PipelineCreateFlags, PipelineLayoutCreateInfo, PipelineShaderStageCreateInfo, PipelineStageFlags, Queue, QueueFlags, SampleCountFlags, Semaphore, ShaderStageFlags, SharingMode, SubmitInfo, WriteDescriptorSet};
 use ash::Instance;
-use ash::util::Align;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
 
-use rosella_rs::init::device::{ApplicationFeature, DeviceMeta, RosellaDevice};
+use rosella_rs::init::device::{ApplicationFeature, DeviceMeta};
 use rosella_rs::init::initialization_registry::InitializationRegistry;
 use rosella_rs::rosella::Rosella;
 use rosella_rs::window::{RosellaSurface, RosellaWindow};
 use rosella_rs::{ALLOCATION_CALLBACKS, NamedID};
 use rosella_rs::shader::{ComputeContext, ComputeShader, GraphicsContext, GraphicsShader};
-use rosella_rs::shader::vertex::{VertexFormat, VertexFormatBuilder, VertexFormatElement};
+use rosella_rs::shader::vertex::{VertexFormatBuilder};
 use rosella_rs::shader::vertex::data_type;
 
 struct QueueFamilyIndices {
@@ -129,7 +126,6 @@ fn main() {
     let compute_queue = unsafe { rosella.device.get_device_queue(0, 0) };
     let compute_shader = ComputeShader::new(rosella.device.clone(), include_str!("test_resources/compute.comp").to_string(), ComputeContext {});
 
-    let mem_properties = unsafe { rosella.instance.get_physical_device_memory_properties(rosella.device.physical_device) };
     /*let image = unsafe { load_image(include_bytes!("test_resources/help_me_16.png"), &rosella.device, &mem_properties) };
     let buffer_size = image.0;
 

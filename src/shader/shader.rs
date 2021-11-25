@@ -1,16 +1,19 @@
 use crate::shader::vertex::VertexFormat;
 use crate::ALLOCATION_CALLBACKS;
-use ash::vk::{ShaderModule, ShaderModuleCreateInfo};
+use ash::vk::{DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType, Sampler, ShaderModule, ShaderModuleCreateInfo, ShaderStageFlags};
 use ash::Entry;
 use shaderc::{CompileOptions, Compiler, ShaderKind, TargetEnv};
 use std::collections::HashSet;
 use std::sync::Arc;
-use crate::rosella::DeviceContext;
+use crate::rosella::{DeviceContext, Rosella};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Uniform {
     pub name: String,
-    //TODO: the rest of this
+    pub binding: u32,
+    pub stage: ShaderStage,
+    pub uniform_type: UniformType,
+    pub immutable_samplers: Option<Vec<Sampler>>,
 }
 
 pub struct GraphicsContext {
@@ -22,12 +25,26 @@ pub struct GraphicsContext {
     pub vertex_format: VertexFormat,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum UniformType {
+    ImageSampler,
+    StorageImage,
+    StorageBuffer,
+    DynamicStorageBuffer,
+}
 
-pub struct ShaderStage {}
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum ShaderStage {
+    Vertex,
+    Geometry,
+    Fragment,
+    Compute,
+    All,
+    AllGraphics,
+}
 
 /// Context relating to compute shaders. For example Inputs, Outputs, etc
-pub struct ComputeContext {
-}
+pub struct ComputeContext {}
 
 /// Shaders & context needed to render a object.
 pub struct GraphicsShader {
@@ -123,6 +140,43 @@ impl GraphicsShader {
 
     /// Sends a command to run the compute shader.
     pub(crate) fn dispatch() {}
+}
+
+impl GraphicsContext {
+    fn create_layout(&self, rosella: &Rosella) -> DescriptorSetLayout {
+        let mut bindings = vec![];
+
+        for uniform in self.mutable_uniforms.iter() {
+            let descriptor_type = match uniform.uniform_type {
+                UniformType::ImageSampler => DescriptorType::COMBINED_IMAGE_SAMPLER,
+                UniformType::StorageImage => DescriptorType::STORAGE_IMAGE,
+                UniformType::StorageBuffer => DescriptorType::STORAGE_BUFFER,
+                UniformType::DynamicStorageBuffer => DescriptorType::STORAGE_BUFFER_DYNAMIC,
+            };
+
+            let stage = match uniform.stage {
+                ShaderStage::Vertex => ShaderStageFlags::VERTEX,
+                ShaderStage::Geometry => ShaderStageFlags::GEOMETRY,
+                ShaderStage::Fragment => ShaderStageFlags::FRAGMENT,
+                ShaderStage::Compute => ShaderStageFlags::COMPUTE,
+                ShaderStage::All => ShaderStageFlags::ALL,
+                ShaderStage::AllGraphics => ShaderStageFlags::ALL_GRAPHICS,
+            };
+
+            bindings.push(DescriptorSetLayoutBinding::builder()
+                .binding(uniform.binding)
+                .descriptor_type(descriptor_type)
+                .descriptor_count(1)
+                .stage_flags(stage)
+                .immutable_samplers(Default::default())
+                .build());
+        }
+
+        let layout_create_info = DescriptorSetLayoutCreateInfo::builder()
+            .bindings(bindings.as_slice()); // The count is handled here for us by the builder.
+
+        unsafe { rosella.device.create_descriptor_set_layout(&layout_create_info, ALLOCATION_CALLBACKS) }.expect("Failed to create VkDescriptorSetLayout.")
+    }
 }
 
 impl Drop for GraphicsShader {

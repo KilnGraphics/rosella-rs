@@ -138,7 +138,7 @@ fn main() {
     let mut buffer_create_info = BufferCreateInfo::builder()
         .flags(BufferCreateFlags::empty())
         .size(buffer_size)
-        .usage(BufferUsageFlags::STORAGE_BUFFER)
+        .usage(BufferUsageFlags::StorageBuffer)
         .sharing_mode(SharingMode::EXCLUSIVE)
         .queue_family_indices(Default::default());
 
@@ -237,7 +237,7 @@ fn main() {
         WriteDescriptorSet::builder()
             .dst_set(des)
             .dst_binding(0)
-            .descriptor_type(DescriptorType::STORAGE_IMAGE)
+            .descriptor_type(DescriptorType::StorageImage)
             .image_info(descriptor_image_infos.as_slice()),
         WriteDescriptorSet::builder(),
     ];*/

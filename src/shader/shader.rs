@@ -1,9 +1,10 @@
 use crate::shader::vertex::VertexFormat;
 use crate::ALLOCATION_CALLBACKS;
-use ash::vk::{DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType, Sampler, ShaderModule, ShaderModuleCreateInfo, ShaderStageFlags};
+use ash::vk::{DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType, GraphicsPipelineCreateInfo, PipelineShaderStageCreateInfo, Sampler, ShaderModule, ShaderModuleCreateInfo, ShaderStageFlags};
 use ash::Entry;
 use shaderc::{CompileOptions, Compiler, ShaderKind, TargetEnv};
 use std::collections::HashSet;
+use std::ffi::CString;
 use std::sync::Arc;
 use crate::rosella::{DeviceContext, Rosella};
 
@@ -130,6 +131,26 @@ impl GraphicsShader {
             )
         }.unwrap();
 
+        let stage_name = CString::new("main").unwrap();
+
+        // TODO: geometry shader support somehow...
+        let stages = vec![
+            PipelineShaderStageCreateInfo::builder()
+                .stage(ShaderStageFlags::VERTEX)
+                .module(vertex_shader)
+                .name(&stage_name)
+                .build(),
+            PipelineShaderStageCreateInfo::builder()
+                .stage(ShaderStageFlags::FRAGMENT)
+                .module(fragment_shader)
+                .name(&stage_name)
+                .build(),
+        ];
+
+        // TODO: finish
+        let graphics_pipeline_create_info = GraphicsPipelineCreateInfo::builder()
+            .stages(stages.as_slice());
+
         GraphicsShader {
             device,
             graphics_context,
@@ -143,7 +164,15 @@ impl GraphicsShader {
 }
 
 impl GraphicsContext {
-    fn create_layout(&self, rosella: &Rosella) -> DescriptorSetLayout {
+    pub fn new(vertex_format: VertexFormat) -> GraphicsContext {
+        GraphicsContext {
+            mutable_uniforms: HashSet::new(),
+            push_uniforms: HashSet::new(),
+            vertex_format,
+        }
+    }
+
+    pub fn create_layout(&self, rosella: &Rosella) -> DescriptorSetLayout {
         let mut bindings = vec![];
 
         for uniform in self.mutable_uniforms.iter() {

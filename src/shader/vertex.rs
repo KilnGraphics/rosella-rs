@@ -33,6 +33,8 @@ impl VertexFormatBuilder {
                 data_type::FLOAT =>
                     match amount {
                         3 => Format::R32G32B32_SFLOAT,
+                        2 => Format::R32G32_SFLOAT,
+                        1 => Format::R32_SFLOAT,
                         _ => panic!("Cannot Handle '{}' Floats", amount)
                     }
 
@@ -44,7 +46,7 @@ impl VertexFormatBuilder {
         self
     }
 
-    pub fn build(mut self) -> VertexFormat {
+    pub fn build(self) -> VertexFormat {
         VertexFormat::new(self.elements)
     }
 }

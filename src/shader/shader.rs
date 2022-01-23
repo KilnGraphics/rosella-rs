@@ -1,10 +1,11 @@
 use crate::shader::vertex::VertexFormat;
-use crate::ALLOCATION_CALLBACKS;
+use ash::vk::{ShaderModule, ShaderModuleCreateInfo};
 use ash::vk::{DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType, GraphicsPipelineCreateInfo, PipelineShaderStageCreateInfo, Sampler, ShaderModule, ShaderModuleCreateInfo, ShaderStageFlags};
-use ash::Entry;
+use ash::{Device, Entry};
 use shaderc::{CompileOptions, Compiler, ShaderKind, TargetEnv};
 use std::collections::HashSet;
 use std::ffi::CString;
+use std::rc::Rc;
 use std::sync::Arc;
 use crate::rosella::{DeviceContext, Rosella};
 
@@ -49,7 +50,7 @@ pub struct ComputeContext {}
 
 /// Shaders & context needed to render a object.
 pub struct GraphicsShader {
-    pub device: Arc<DeviceContext>,
+    pub device: DeviceContext,
     pub graphics_context: GraphicsContext,
     pub vertex_shader: ShaderModule,
     pub fragment_shader: ShaderModule,
@@ -94,7 +95,7 @@ impl ComputeShader {
 impl GraphicsShader {
     /// Creates a new GraphicsShader based on glsl shaders.
     pub fn new(
-        device: Arc<DeviceContext>,
+        device: DeviceContext,
         vertex_shader: String,
         fragment_shader: String,
         graphics_context: GraphicsContext,
@@ -104,7 +105,7 @@ impl GraphicsShader {
 
         options.set_target_env(
             TargetEnv::Vulkan,
-            Entry::new().try_enumerate_instance_version().ok().flatten().unwrap(),
+            device.get_entry().try_enumerate_instance_version().ok().flatten().unwrap(),
         );
 
         let vertex_shader = unsafe {
@@ -115,7 +116,7 @@ impl GraphicsShader {
                         .expect("Failed to compile the VertexShader.")
                         .as_binary(),
                 ),
-                ALLOCATION_CALLBACKS,
+                None,
             )
         }.unwrap();
 
@@ -127,7 +128,7 @@ impl GraphicsShader {
                         .expect("Failed to compile the Fragment Shader.")
                         .as_binary(),
                 ),
-                ALLOCATION_CALLBACKS,
+                None,
             )
         }.unwrap();
 
@@ -211,8 +212,8 @@ impl GraphicsContext {
 impl Drop for GraphicsShader {
     fn drop(&mut self) {
         unsafe {
-            self.device.vk().destroy_shader_module(self.vertex_shader, ALLOCATION_CALLBACKS);
-            self.device.vk().destroy_shader_module(self.fragment_shader, ALLOCATION_CALLBACKS);
+            self.device.vk().destroy_shader_module(self.vertex_shader, None);
+            self.device.vk().destroy_shader_module(self.fragment_shader, None);
         }
     }
 }

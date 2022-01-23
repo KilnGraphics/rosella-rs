@@ -1,144 +1,70 @@
-use std::ops::Deref;
-use std::sync::Arc;
-use crate::ALLOCATION_CALLBACKS;
-use ash::{Device, Entry, Instance};
-
-use crate::init::device::{create_device};
+use crate::init::device::{create_device, DeviceCreateError};
 use crate::init::initialization_registry::InitializationRegistry;
-use crate::init::instance_builder::create_instance;
+use crate::init::instance::{create_instance, InstanceCreateError};
 use crate::window::{RosellaSurface, RosellaWindow};
 
+use crate::init::rosella_features::WindowSurface;
+use crate::objects::ObjectManager;
+
+pub use crate::instance::VulkanVersion;
+pub use crate::instance::InstanceContext;
+pub use crate::device::DeviceContext;
+
 pub struct Rosella {
-    pub instance: Arc<InstanceContext>,
+    pub instance: InstanceContext,
     pub surface: RosellaSurface,
-    pub device: Arc<DeviceContext>,
+    pub device: DeviceContext,
+    pub object_manager: ObjectManager,
+}
+
+#[derive(Debug)]
+pub enum RosellaCreateError {
+    InstanceCreateError(InstanceCreateError),
+    DeviceCreateError(DeviceCreateError),
+}
+
+impl From<InstanceCreateError> for RosellaCreateError {
+    fn from(err: InstanceCreateError) -> Self {
+        RosellaCreateError::InstanceCreateError(err)
+    }
+}
+
+impl From<DeviceCreateError> for RosellaCreateError {
+    fn from(err: DeviceCreateError) -> Self {
+        RosellaCreateError::DeviceCreateError(err)
+    }
 }
 
 impl Rosella {
-    pub fn new(registry: InitializationRegistry, window: &RosellaWindow, application_name: &str) -> Rosella {
+    pub fn new(mut registry: InitializationRegistry, window: &RosellaWindow, application_name: &str) -> Result<Rosella, RosellaCreateError> {
+        log::info!("Starting Rosella");
+
+        WindowSurface::register_into(&mut registry, &window.handle, true);
+
         let now = std::time::Instant::now();
 
-        let ash_entry = ash::Entry::new();
-        let ash_instance = create_instance(&registry, application_name, 0, window, &ash_entry);
+        let instance = create_instance(&mut registry, application_name, 0)?;
 
-        let instance = Arc::new(InstanceContext::new(ash_entry, ash_instance));
+        let surface = RosellaSurface::new(instance.vk(), &instance.get_entry(), window);
 
-        let surface = RosellaSurface::new(instance.vk(), &Entry::new(), window);
-        let ash_device = create_device(instance.vk(), registry, &surface);
-
-        let device = Arc::new(DeviceContext::new(instance.clone(), ash_device).unwrap());
+        let device = create_device(&mut registry, instance.clone())?;
 
         let elapsed = now.elapsed();
         println!("Instance & Device Initialization took: {:.2?}", elapsed);
 
-        /*        let vk = Entry::new();
-        let app_name = CString::new(application_name);
-        let surface_extensions = ash_window::enumerate_required_extensions(&window.handle).unwrap();
-        let mut extension_names_raw = surface_extensions
-            .iter()
-            .map(|ext| ext.as_ptr())
-            .collect::<Vec<_>>();
-        extension_names_raw.push(DebugUtils::name().as_ptr());
+        let object_manager = ObjectManager::new(device.clone());
 
-        let debug_utils_loader = DebugUtils::new(&vk, &instance);
-
-        unsafe {
-            let debug_call_back = debug_utils_loader
-                .create_debug_utils_messenger(&debug_info, ALLOCATION_CALLBACKS)
-                .unwrap();
-        }*/
-
-        Rosella { instance, surface, device }
+        Ok(Rosella {
+            instance,
+            surface,
+            device,
+            object_manager,
+        })
     }
 
     pub fn window_update(&self) {}
 
     pub fn recreate_swapchain(&self, width: u32, height: u32) {
         println!("resize to {}x{}", width, height);
-    }
-}
-
-pub struct InstanceContext {
-    entry: ash::Entry,
-    instance: ash::Instance,
-}
-
-impl Deref for InstanceContext {
-    type Target = Instance;
-
-    fn deref(&self) -> &Self::Target {
-        &self.instance
-    }
-}
-
-impl InstanceContext {
-    fn new(entry: ash::Entry, instance: ash::Instance) -> Self {
-        Self{ entry, instance }
-    }
-
-    pub fn get_entry(&self) -> &ash::Entry {
-        &self.entry
-    }
-
-    pub fn vk(&self) -> &ash::Instance {
-        &self.instance
-    }
-}
-
-impl Drop for InstanceContext {
-    fn drop(&mut self) {
-        unsafe {
-            self.instance.destroy_instance(ALLOCATION_CALLBACKS);
-        }
-    }
-}
-
-pub struct DeviceContext {
-    #[allow(unused)]
-    instance: Arc<InstanceContext>,
-    device: ash::Device,
-    synchronization_2: ash::extensions::khr::Synchronization2,
-    timeline_semaphore: ash::extensions::khr::TimelineSemaphore,
-}
-
-impl Deref for DeviceContext {
-    type Target = Device;
-
-    fn deref(&self) -> &Self::Target {
-        &self.device
-    }
-}
-
-impl DeviceContext {
-    fn new(instance: Arc<InstanceContext>, device: ash::Device) -> Result<Self, &'static str> {
-        let synchronization_2 = ash::extensions::khr::Synchronization2::new(instance.vk(), &device);
-        let timeline_semaphore = ash::extensions::khr::TimelineSemaphore::new(instance.get_entry(), instance.vk());
-
-        Ok(Self{
-            instance,
-            device,
-            synchronization_2,
-            timeline_semaphore
-        })
-    }
-
-    pub fn vk(&self) -> &ash::Device {
-        &self.device
-    }
-
-    pub fn get_synchronization_2(&self) -> &ash::extensions::khr::Synchronization2 {
-        &self.synchronization_2
-    }
-
-    pub fn get_timeline_semaphore(&self) -> &ash::extensions::khr::TimelineSemaphore {
-        &self.timeline_semaphore
-    }
-}
-
-impl Drop for DeviceContext {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_device(ALLOCATION_CALLBACKS);
-        }
     }
 }

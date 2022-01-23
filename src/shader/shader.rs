@@ -1,12 +1,9 @@
 use crate::shader::vertex::VertexFormat;
-use ash::vk::{ShaderModule, ShaderModuleCreateInfo};
 use ash::vk::{DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType, GraphicsPipelineCreateInfo, PipelineShaderStageCreateInfo, Sampler, ShaderModule, ShaderModuleCreateInfo, ShaderStageFlags};
-use ash::{Device, Entry};
+use ash::Entry;
 use shaderc::{CompileOptions, Compiler, ShaderKind, TargetEnv};
 use std::collections::HashSet;
 use std::ffi::CString;
-use std::rc::Rc;
-use std::sync::Arc;
 use crate::rosella::{DeviceContext, Rosella};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -64,7 +61,7 @@ pub struct ComputeShader {
 
 impl ComputeShader {
     /// Creates a new ComputeShader based on a glsl shader.
-    pub fn new(device: Arc<DeviceContext>, compute_shader: String, compute_context: ComputeContext) -> ComputeShader {
+    pub fn new(device: DeviceContext, compute_shader: String, compute_context: ComputeContext) -> ComputeShader {
         let mut compiler = Compiler::new().unwrap();
         let mut options = CompileOptions::new().unwrap();
 
@@ -74,14 +71,14 @@ impl ComputeShader {
         );
 
         let compute_shader = unsafe {
-            device.create_shader_module(
+            device.vk().create_shader_module(
                 &ShaderModuleCreateInfo::builder().code(
                     compiler
                         .compile_into_spirv(&compute_shader, ShaderKind::Compute, "compute.glsl", "main", Some(&options))
                         .expect("Failed to compile the ComputeShader.")
                         .as_binary(),
                 ),
-                ALLOCATION_CALLBACKS,
+                None,
             )
         }.unwrap();
 
@@ -205,7 +202,7 @@ impl GraphicsContext {
         let layout_create_info = DescriptorSetLayoutCreateInfo::builder()
             .bindings(bindings.as_slice()); // The count is handled here for us by the builder.
 
-        unsafe { rosella.device.create_descriptor_set_layout(&layout_create_info, ALLOCATION_CALLBACKS) }.expect("Failed to create VkDescriptorSetLayout.")
+        unsafe { rosella.device.vk().create_descriptor_set_layout(&layout_create_info, None) }.expect("Failed to create VkDescriptorSetLayout.")
     }
 }
 

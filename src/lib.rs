@@ -1,5 +1,3 @@
-pub use util::id::NamedID;
-
 pub mod init;
 pub mod rosella;
 pub mod shader;
@@ -8,4 +6,11 @@ pub mod util;
 pub mod window;
 pub mod execution_engine;
 
-pub use util::allocation_callbacks::ALLOCATION_CALLBACKS;
+mod instance;
+mod device;
+
+pub use util::id::UUID;
+pub use util::id::NamedUUID;
+
+#[cfg(any(test, feature = "__internal_doc_test"))]
+pub use util::test;

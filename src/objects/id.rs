@@ -1,6 +1,48 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use crate::util::id::{GlobalId, LocalId, UUID};
+use std::num::NonZeroU64;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use ash::vk;
+
+/// An identifier for object sets
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ObjectSetId(NonZeroU64);
+
+static NEXT_OBJECT_SET_ID : AtomicU64 = AtomicU64::new(1);
+
+impl ObjectSetId {
+    const OBJECT_SET_ID_MAX : u64 = (1u64 << 40u32) - 1u64;
+
+    /// Creates a new unique object set id
+    pub fn new() -> Self {
+        let next = NEXT_OBJECT_SET_ID.fetch_add(1, Ordering::Relaxed);
+        if next > Self::OBJECT_SET_ID_MAX {
+            panic!("ObjectSetId overflow");
+        }
+
+        Self(NonZeroU64::new(next).unwrap())
+    }
+
+    fn from_raw(raw: u64) -> Self {
+        if raw > Self::OBJECT_SET_ID_MAX {
+            panic!("Value passed to ObjectSetId::from_raw is out of bounds");
+        }
+
+        Self(NonZeroU64::new(raw).unwrap())
+    }
+
+    /// Returns the raw 64bit value of the id
+    pub fn get_raw(&self) -> u64 {
+        self.0.get()
+    }
+}
+
+impl Debug for ObjectSetId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("ObjectSetId({:#010X})", self.0.get()))
+    }
+}
 
 pub struct ObjectType;
 
@@ -12,9 +54,11 @@ impl ObjectType {
             Self::BUFFER_VIEW => "BufferView",
             Self::IMAGE => "Image",
             Self::IMAGE_VIEW => "ImageView",
-            Self::BINARY_SEMAPHORE => "BinarySemaphore",
-            Self::TIMELINE_SEMAPHORE => "TimelineSemaphore",
+            Self::SEMAPHORE => "Semaphore",
             Self::EVENT => "Event",
+            Self::FENCE => "Fence",
+            Self::SURFACE => "Surface",
+            Self::SWAPCHAIN => "Swapchain",
             _ => "Invalid",
         }
     }
@@ -25,64 +69,57 @@ impl ObjectType {
     pub const BUFFER_VIEW: u8 = 2u8;
     pub const IMAGE: u8 = 3u8;
     pub const IMAGE_VIEW: u8 = 4u8;
-    pub const BINARY_SEMAPHORE: u8 = 5u8;
-    pub const TIMELINE_SEMAPHORE: u8 = 6u8;
-    pub const EVENT: u8 = 7u8;
+    pub const SEMAPHORE: u8 = 5u8;
+    pub const EVENT: u8 = 6u8;
+    pub const FENCE: u8 = 7u8;
+    pub const SURFACE: u8 = 8u8;
+    pub const SWAPCHAIN: u8 = 9u8;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ObjectId<const TYPE: u8>(UUID);
+pub struct ObjectId<const TYPE: u8>(NonZeroU64);
 
 impl<const TYPE: u8> ObjectId<TYPE> {
-    pub const INDEX_BITS: u32 = 56u32;
-    const INDEX_OFFSET: u32 = 0u32;
-    pub const INDEX_MAX: u64 = (1u64 << Self::INDEX_BITS) - 1u64;
+    const SET_ID_BITS: u32 = 40u32;
+    const SET_ID_OFFSET: u32 = 0u32;
+    const SET_ID_MAX: u64 = (1u64 << Self::SET_ID_BITS) - 1u64;
+    const SET_ID_MASK: u64 = Self::SET_ID_MAX << Self::SET_ID_OFFSET;
+
+    const INDEX_OFFSET: u32 = 48u32;
+    const INDEX_MAX: u64 = u16::MAX as u64;
     const INDEX_MASK: u64 = Self::INDEX_MAX << Self::INDEX_OFFSET;
 
-    const TYPE_OFFSET: u32 = Self::INDEX_OFFSET + Self::INDEX_BITS;
-    const TYPE_MASK: u64 = (u8::MAX as u64) << Self::TYPE_OFFSET;
+    const TYPE_OFFSET: u32 = 40u32;
+    const TYPE_MAX: u64 = u8::MAX as u64;
+    const TYPE_MASK: u64 = Self::TYPE_MAX << Self::TYPE_OFFSET;
 
-    fn make(global_id: GlobalId, index: u64, object_type: u8) -> Self {
-        if index > Self::INDEX_MAX {
-            panic!("Local id out of range");
-        }
+    fn make(set_id: ObjectSetId, index: u16, object_type: u8) -> Self {
+        let id = (set_id.get_raw() << Self::SET_ID_OFFSET) | ((index as u64) << Self::INDEX_OFFSET) | ((object_type as u64) << Self::TYPE_OFFSET);
 
-        let local = (index << Self::INDEX_OFFSET) | ((object_type as u64) << Self::TYPE_OFFSET);
-
-        Self(UUID{
-            global: global_id,
-            local: LocalId::from_raw(local),
-        })
+        Self(NonZeroU64::new(id).unwrap())
     }
 
-    pub const fn get_global_id(&self) -> GlobalId {
-        self.0.global
+    pub fn get_set_id(&self) -> ObjectSetId {
+        ObjectSetId::from_raw((self.0.get() & Self::SET_ID_MASK) >> Self::SET_ID_OFFSET)
     }
 
-    pub const fn get_local_id(&self) -> LocalId {
-        self.0.local
-    }
-
-    pub const fn get_index(&self) -> u64 {
-        (self.0.local.get_raw() & Self::INDEX_MASK) >> Self::INDEX_OFFSET
+    pub const fn get_index(&self) -> u16 {
+        ((self.0.get() & Self::INDEX_MASK) >> Self::INDEX_OFFSET) as u16
     }
 
     pub const fn get_type(&self) -> u8 {
-        ((self.0.local.get_raw() & Self::TYPE_MASK) >> Self::TYPE_OFFSET) as u8
+        ((self.0.get() & Self::TYPE_MASK) >> Self::TYPE_OFFSET) as u8
     }
 
+    /// Converts the id to a generic id
     pub const fn as_generic(&self) -> ObjectId<{ ObjectType::GENERIC }> {
         ObjectId::<{ ObjectType::GENERIC }>(self.0)
     }
 }
 
-impl<const TYPE: u8> Into<UUID> for ObjectId<TYPE> {
-    fn into(self) -> UUID {
-        self.0
-    }
-}
-
 impl ObjectId<{ ObjectType::GENERIC }> {
+    /// Attempts to cast a generic object id to a specific type. If the generic id is not of the
+    /// correct type `None` is returned.
     pub const fn downcast<const TRG: u8>(self) -> Option<ObjectId<TRG>> {
         if self.get_type() == TRG {
             Some(ObjectId::<TRG>(self.0))
@@ -94,11 +131,7 @@ impl ObjectId<{ ObjectType::GENERIC }> {
 
 impl<const TYPE: u8> Debug for ObjectId<TYPE> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ObjectId")
-            .field("type", &self.get_type())
-            .field("local_id", &self.get_local_id())
-            .field("global_id", &self.get_global_id())
-            .finish()
+        f.write_fmt(format_args!("ObjectId(Set: {:#010X}, Index: {:#04X}, Type: {})", self.get_set_id().get_raw(), self.get_index(), self.get_type()))
     }
 }
 
@@ -108,53 +141,57 @@ impl<const TYPE: u8> Hash for ObjectId<TYPE> {
     }
 }
 
-impl ObjectId<{ ObjectType::BUFFER }> {
-    pub fn new(global_id: GlobalId, index: u64) -> Self {
-        Self::make(global_id, index, ObjectType::BUFFER)
+/// Utility trait used to get the id type for a handle type
+pub trait ObjectHandleType {
+    type Id;
+}
+
+/// Utility trait used to get the handle type for an id type
+pub trait ObjectIdType {
+    type Handle: vk::Handle;
+
+    fn as_generic(&self) -> GenericId;
+}
+
+macro_rules! make_object_id {
+    ($value:expr, $handle_type:ty) => {
+        impl ObjectId<{$value}> {
+            pub fn new(set_id: ObjectSetId, index: u16) -> Self {
+                Self::make(set_id, index, $value)
+            }
+        }
+
+        impl ObjectIdType for ObjectId<{$value}> {
+            type Handle = $handle_type;
+
+            fn as_generic(&self) -> GenericId {
+                self.as_generic()
+            }
+        }
+
+        impl ObjectHandleType for $handle_type {
+            type Id = ObjectId<{$value}>;
+        }
     }
 }
 
-impl ObjectId<{ ObjectType::BUFFER_VIEW }> {
-    pub fn new(global_id: GlobalId, index: u64) -> Self {
-        Self::make(global_id, index, ObjectType::BUFFER_VIEW)
-    }
-}
-
-impl ObjectId<{ ObjectType::IMAGE }> {
-    pub fn new(global_id: GlobalId, index: u64) -> Self {
-        Self::make(global_id, index, ObjectType::IMAGE)
-    }
-}
-
-impl ObjectId<{ ObjectType::IMAGE_VIEW }> {
-    pub fn new(global_id: GlobalId, index: u64) -> Self {
-        Self::make(global_id, index, ObjectType::IMAGE_VIEW)
-    }
-}
-
-impl ObjectId<{ ObjectType::BINARY_SEMAPHORE }> {
-    pub fn new(global_id: GlobalId, index: u64) -> Self {
-        Self::make(global_id, index, ObjectType::BINARY_SEMAPHORE)
-    }
-}
-
-impl ObjectId<{ ObjectType::TIMELINE_SEMAPHORE }> {
-    pub fn new(global_id: GlobalId, index: u64) -> Self {
-        Self::make(global_id, index, ObjectType::TIMELINE_SEMAPHORE)
-    }
-}
-
-impl ObjectId<{ ObjectType::EVENT }> {
-    pub fn new(global_id: GlobalId, index: u64) -> Self {
-        Self::make(global_id, index, ObjectType::EVENT)
-    }
-}
+make_object_id!(ObjectType::BUFFER, vk::Buffer);
+make_object_id!(ObjectType::BUFFER_VIEW, vk::BufferView);
+make_object_id!(ObjectType::IMAGE, vk::Image);
+make_object_id!(ObjectType::IMAGE_VIEW, vk::ImageView);
+make_object_id!(ObjectType::SEMAPHORE, vk::Semaphore);
+make_object_id!(ObjectType::EVENT, vk::Event);
+make_object_id!(ObjectType::FENCE, vk::Fence);
+make_object_id!(ObjectType::SURFACE, vk::SurfaceKHR);
+make_object_id!(ObjectType::SWAPCHAIN, vk::SwapchainKHR);
 
 pub type GenericId = ObjectId<{ ObjectType::GENERIC }>;
 pub type BufferId = ObjectId<{ ObjectType::BUFFER }>;
 pub type BufferViewId = ObjectId<{ ObjectType::BUFFER_VIEW }>;
 pub type ImageId = ObjectId<{ ObjectType::IMAGE }>;
 pub type ImageViewId = ObjectId<{ ObjectType::IMAGE_VIEW }>;
-pub type BinarySemaphoreId = ObjectId<{ ObjectType::BINARY_SEMAPHORE }>;
-pub type TimelineSemaphoreId = ObjectId<{ ObjectType::TIMELINE_SEMAPHORE }>;
+pub type SemaphoreId = ObjectId<{ ObjectType::SEMAPHORE }>;
 pub type EventId = ObjectId<{ ObjectType::EVENT }>;
+pub type FenceId = ObjectId<{ ObjectType::FENCE }>;
+pub type SurfaceId = ObjectId<{ ObjectType::SURFACE }>;
+pub type SwapchainId = ObjectId<{ ObjectType::SWAPCHAIN }>;

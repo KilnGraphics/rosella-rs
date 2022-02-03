@@ -16,11 +16,16 @@ use crate::rosella::VulkanVersion;
 /// Registers all instance and device features required for rosella to work in headless mode
 pub fn register_rosella_headless(registry: &mut InitializationRegistry) {
     KHRGetPhysicalDeviceProperties2::register_into(registry, false);
-    KHRTimelineSemaphoreInstance::register_into(registry, false);
     RosellaInstanceBase::register_into(registry, true);
 
-    KHRTimelineSemaphoreDevice::register_into(registry, false);
+    KHRTimelineSemaphore::register_into(registry, false);
     RosellaDeviceBase::register_into(registry, true);
+}
+
+/// Registers all instance and device features required for rosella to present images
+pub fn register_rosella_present(registry: &mut InitializationRegistry) {
+    KHRSurface::register_into(registry, true);
+    KHRSwapchain::register_into(registry, true);
 }
 
 /// Registers instance and device features that provide debugging capabilities
@@ -34,7 +39,7 @@ pub fn register_rosella_debug(registry: &mut InitializationRegistry, required: b
 macro_rules! const_instance_feature{
     ($struct_name:ty, $name:literal, [$($dependency:expr),*]) => {
         impl $struct_name {
-            const NAME: NamedUUID = NamedUUID::new_const($name);
+            const NAME: NamedUUID = NamedUUID::from_str($name);
             const DEPENDENCIES: &'static [NamedUUID] = &[$($dependency,)*];
 
             fn register_into(registry: &mut InitializationRegistry, required: bool) {
@@ -76,7 +81,7 @@ macro_rules! const_device_feature{
         }
 
         impl $struct_name {
-            const NAME: NamedUUID = NamedUUID::new_const($name);
+            const NAME: NamedUUID = NamedUUID::from_str($name);
             const DEPENDENCIES: &'static [NamedUUID] = &[$($dependency,)*];
 
             fn register_into(registry: &mut InitializationRegistry, required: bool) {
@@ -104,15 +109,10 @@ macro_rules! const_device_feature{
 /// Instance feature which provides all requirements needed for rosella to function in headless
 #[derive(Default)]
 pub struct RosellaInstanceBase;
-const_instance_feature!(RosellaInstanceBase, "rosella:instance_base", [KHRTimelineSemaphoreInstance::NAME]);
+const_instance_feature!(RosellaInstanceBase, "rosella:instance_base", []);
 
 impl ApplicationInstanceFeature for RosellaInstanceBase {
-    fn init(&mut self, features: &mut dyn FeatureAccess, _: &InstanceInfo) -> InitResult {
-        if !features.is_supported(&KHRTimelineSemaphoreInstance::NAME.get_uuid()) {
-            log::warn!("KHRTimelineSemaphore is not supported");
-            return InitResult::Disable;
-        }
-
+    fn init(&mut self, _: &mut dyn FeatureAccess, _: &InstanceInfo) -> InitResult {
         InitResult::Ok
     }
 
@@ -207,42 +207,31 @@ impl ApplicationInstanceFeature for KHRGetPhysicalDeviceProperties2 {
     }
 }
 
-/// Instance feature representing the VK_KHR_timeline_semaphore feature set.
-/// If the instance version is below 1.2 it will load the extension.
+/// Instance feature representing the VK_KHR_surface extension.
 #[derive(Default)]
-pub struct KHRTimelineSemaphoreInstance;
-const_instance_feature!(KHRTimelineSemaphoreInstance, "rosella:instance_khr_timeline_semaphore", [KHRGetPhysicalDeviceProperties2::NAME]);
+pub struct KHRSurface;
+const_instance_feature!(KHRSurface, "rosella:instance_khr_surface", []);
 
-impl ApplicationInstanceFeature for KHRTimelineSemaphoreInstance {
-    fn init(&mut self, features: &mut dyn FeatureAccess, info: &InstanceInfo) -> InitResult {
-        if !features.is_supported(&KHRGetPhysicalDeviceProperties2::NAME.get_uuid()) {
-            log::warn!("KHRGetPhysicalDeviceProperties2 is not supported");
+impl ApplicationInstanceFeature for KHRSurface {
+    fn init(&mut self, _: &mut dyn FeatureAccess, info: &InstanceInfo) -> InitResult {
+        if !info.is_extension_supported::<ash::extensions::khr::Surface>() {
             return InitResult::Disable;
         }
 
-        let core_present = info.get_vulkan_version().is_supported(VulkanVersion::VK_1_2);
-        if !core_present {
-            if !info.is_extension_supported::<ash::extensions::khr::TimelineSemaphore>() {
-                return InitResult::Disable;
-            }
-        }
-
-        InitResult::Ok
+        return InitResult::Ok;
     }
 
-    fn enable(&mut self, _: &mut dyn FeatureAccess, info: &InstanceInfo, config: &mut InstanceConfigurator) {
-        if !info.get_vulkan_version().is_supported(VulkanVersion::VK_1_2) {
-            config.enable_extension_no_load::<ash::extensions::khr::TimelineSemaphore>();
-        }
+    fn enable(&mut self, _: &mut dyn FeatureAccess, _: &InstanceInfo, config: &mut InstanceConfigurator) {
+        config.enable_extension::<ash::extensions::khr::Surface>();
     }
 }
 
 /// Device feature representing the VK_KHR_timeline_semaphore feature set.
 #[derive(Default)]
-pub struct KHRTimelineSemaphoreDevice;
-const_device_feature!(KHRTimelineSemaphoreDevice, "rosella:device_khr_timeline_semaphore", []);
+pub struct KHRTimelineSemaphore;
+const_device_feature!(KHRTimelineSemaphore, "rosella:device_khr_timeline_semaphore", []);
 
-impl ApplicationDeviceFeature for KHRTimelineSemaphoreDevice {
+impl ApplicationDeviceFeature for KHRTimelineSemaphore {
     fn init(&mut self, _: &mut dyn FeatureAccess, info: &DeviceInfo) -> InitResult {
         if info.get_instance().get_version().is_supported(VulkanVersion::VK_1_2) {
             if info.get_device_1_2_features().unwrap().timeline_semaphore == vk::TRUE {
@@ -285,7 +274,7 @@ impl WindowSurface {
         let extensions = ash_window::enumerate_required_extensions(window).unwrap();
 
         Self {
-            name: NamedUUID::new_const("rosella:instance_window_surface"),
+            name: NamedUUID::from_str("rosella:instance_window_surface"),
             extensions: extensions.into_iter().map(|str| std::ffi::CString::from(str)).collect()
         }
     }
@@ -329,12 +318,12 @@ impl ApplicationInstanceFeature for WindowSurface {
 
 /// Device feature which provides all requirements needed for rosella to function in headless
 #[derive(Default)]
-struct RosellaDeviceBase;
-const_device_feature!(RosellaDeviceBase, "rosella:device_base", [KHRTimelineSemaphoreDevice::NAME]);
+pub struct RosellaDeviceBase;
+const_device_feature!(RosellaDeviceBase, "rosella:device_base", [KHRTimelineSemaphore::NAME]);
 
 impl ApplicationDeviceFeature for RosellaDeviceBase {
     fn init(&mut self, features: &mut dyn FeatureAccess, _: &DeviceInfo) -> InitResult {
-        if !features.is_supported(&KHRTimelineSemaphoreDevice::NAME.get_uuid()) {
+        if !features.is_supported(&KHRTimelineSemaphore::NAME.get_uuid()) {
             return InitResult::Disable;
         }
 
@@ -343,5 +332,24 @@ impl ApplicationDeviceFeature for RosellaDeviceBase {
 
     fn enable(&mut self, _: &mut dyn FeatureAccess, _: &DeviceInfo, config: &mut DeviceConfigurator) {
         config.add_queue_request(0); // TODO This is just to prevent validation errors
+    }
+}
+
+/// Device feature representing the VK_KHR_swapchain extension.
+#[derive(Default)]
+pub struct KHRSwapchain;
+const_device_feature!(KHRSwapchain, "rosella:device_khr_swapchain", []);
+
+impl ApplicationDeviceFeature for KHRSwapchain {
+    fn init(&mut self, _: &mut dyn FeatureAccess, info: &DeviceInfo) -> InitResult {
+        if !info.is_extension_supported::<ash::extensions::khr::Swapchain>() {
+            return InitResult::Disable;
+        }
+
+        InitResult::Ok
+    }
+
+    fn enable(&mut self, _: &mut dyn FeatureAccess, _: &DeviceInfo, config: &mut DeviceConfigurator) {
+        config.enable_extension::<ash::extensions::khr::Swapchain>()
     }
 }

@@ -1,8 +1,10 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use ash::vk;
+use crate::objects::{Format, id, SynchronizationGroup};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ImageSize {
     Type1D { width: u32, mip_levels: u32, array_layers: u32 },
     Type2D { width: u32, height: u32, mip_levels: u32, array_layers: u32 },
@@ -111,7 +113,7 @@ impl ImageSize {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ImageSpec {
     pub format: &'static crate::objects::Format,
     pub sample_count: ash::vk::SampleCountFlags,
@@ -144,7 +146,7 @@ impl ImageSpec {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ImageSubresourceRange {
     pub aspect_mask: ash::vk::ImageAspectFlags,
     pub base_mip_level: u32,
@@ -165,26 +167,136 @@ impl ImageSubresourceRange {
     }
 }
 
+/// Contains a description for a vulkan image.
+///
+/// This only contains static information relevant to vulkan (i.e. size or supported usage flags).
 #[non_exhaustive]
-pub struct ImageMeta {
-
-}
-
-#[non_exhaustive]
-pub struct ImageCreateDesc {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ImageDescription {
     pub spec: ImageSpec,
     pub usage_flags: vk::ImageUsageFlags,
 }
 
-impl ImageCreateDesc {
+impl ImageDescription {
     pub fn new_simple(spec: ImageSpec, usage: vk::ImageUsageFlags) -> Self {
         Self{ spec, usage_flags: usage }
     }
 }
 
-pub struct ImageViewCreateDesc {
+/// Contains information about a vulkan image object.
+///
+/// This expands the [`ImageDescription`] struct with information relevant for rosella (i.e.
+/// synchronization group or other runtime information). Every instance of this struct will describe
+/// only one specific image object.
+pub struct ImageInfo {
+    desc: ImageDescription,
+    group: SynchronizationGroup,
+}
+
+impl ImageInfo {
+    pub fn new(desc: ImageDescription, group: SynchronizationGroup) -> Self {
+        Self {
+            desc,
+            group,
+        }
+    }
+
+    pub fn get_description(&self) -> &ImageDescription {
+        &self.desc
+    }
+
+    pub fn get_synchronization_group(&self) -> &SynchronizationGroup {
+        &self.group
+    }
+}
+
+/// Contains a description for a vulkan image view.
+///
+/// This only contains static information relevant to vulkan (i.e. range or format, however not the
+/// source image as image views with different sources may have the same description).
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug)]
+pub struct ImageViewDescription {
     pub view_type: vk::ImageViewType,
-    pub format: &'static crate::objects::Format,
+    pub format: &'static Format,
     pub components: vk::ComponentMapping,
     pub subresource_range: ImageSubresourceRange,
+}
+
+impl ImageViewDescription {
+    /// Creates a image view description with identity component mapping and subresource range
+    /// covering all mip levels and array layers.
+    pub fn make_full(view_type: vk::ImageViewType, format: &'static Format, aspect_mask: vk::ImageAspectFlags) -> Self {
+        Self {
+            view_type,
+            format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY
+            },
+            subresource_range: ImageSubresourceRange {
+                aspect_mask,
+                base_mip_level: 0,
+                mip_level_count: vk::REMAINING_MIP_LEVELS,
+                base_array_layer: 0,
+                array_layer_count: vk::REMAINING_ARRAY_LAYERS,
+            }
+        }
+    }
+
+    /// Creates a image view description with identity component mapping
+    pub fn make_range(view_type: vk::ImageViewType, format: &'static Format, subresource_range: ImageSubresourceRange) -> Self {
+        Self {
+            view_type,
+            format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY
+            },
+            subresource_range
+        }
+    }
+}
+
+/// Contains information about a vulkan image view object
+///
+/// This expands the [`ImageViewDescription`] struct with information relevant for rosella (i.e.
+/// the source image or other runtime information). Every instance of this struct will describe
+/// only one specific image view object.
+pub struct ImageViewInfo {
+    desc: ImageViewDescription,
+    source_image_id: id::ImageId,
+    source_image_info: Arc<ImageInfo>,
+}
+
+impl ImageViewInfo {
+    pub fn new(desc: ImageViewDescription, source_image_id: id::ImageId, source_image_info: Arc<ImageInfo>) -> Self {
+        Self {
+            desc,
+            source_image_id,
+            source_image_info
+        }
+    }
+
+    pub fn get_description(&self) -> &ImageViewDescription {
+        &self.desc
+    }
+
+    pub fn get_source_image_id(&self) -> id::ImageId {
+        self.source_image_id
+    }
+
+    pub fn get_source_image_info(&self) -> &ImageInfo {
+        self.source_image_info.as_ref()
+    }
+
+    /// Utility function to get the synchronization group for this image view.
+    /// Is equivalent to calling `get_source_image_info().get_synchronization_group()`.
+    pub fn get_synchronization_group(&self) -> &SynchronizationGroup {
+        self.source_image_info.get_synchronization_group()
+    }
 }

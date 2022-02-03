@@ -66,10 +66,25 @@ impl SwapchainImageSpec {
 #[derive(Copy, Clone)]
 #[non_exhaustive]
 pub struct SwapchainCreateDesc {
+    pub min_image_count: u32,
     pub image_spec: SwapchainImageSpec,
     pub usage: vk::ImageUsageFlags,
     pub pre_transform: vk::SurfaceTransformFlagsKHR,
     pub composite_alpha: vk::CompositeAlphaFlagsKHR,
     pub present_mode: vk::PresentModeKHR,
     pub clipped: bool,
+}
+
+impl SwapchainCreateDesc {
+    pub fn make(image_spec: SwapchainImageSpec, min_image_count: u32, usage: vk::ImageUsageFlags, present_mode: vk::PresentModeKHR) -> Self {
+        SwapchainCreateDesc {
+            min_image_count,
+            image_spec,
+            usage,
+            pre_transform: vk::SurfaceTransformFlagsKHR::IDENTITY,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+            present_mode,
+            clipped: false,
+        }
+    }
 }

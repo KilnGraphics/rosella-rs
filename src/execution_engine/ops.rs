@@ -4,57 +4,147 @@
 //! vulkan objects are replaced with placeholder objects.
 
 use std::any::Any;
+use std::borrow::Borrow;
 use std::marker::PhantomData;
-use crate::objects::id::GenericId;
+use std::ops::{Deref, DerefMut};
+
+use ash::vk;
+use bumpalo::Bump;
+use ouroboros::self_referencing;
+
+use crate::objects::{id, ImageSubresourceRange};
 
 pub trait ObjectUsageRegistry {
-    fn register_object_usage(&mut self, object: GenericId) -> Result<(), &'static str>;
+    fn register_buffer(&mut self, id: id::BufferId, stages: vk::PipelineStageFlags2KHR, accesses: vk::AccessFlags2KHR);
+
+    fn register_buffer_view(&mut self, id: id::BufferViewId, stages: vk::PipelineStageFlags2KHR, accesses: vk::AccessFlags2KHR);
+
+    fn register_image(&mut self, id: id::ImageId, stages: vk::PipelineStageFlags2KHR, accesses: vk::AccessFlags2KHR, required_layout: vk::ImageLayout, range: ImageSubresourceRange);
+
+    fn register_image_view(&mut self, id: id::ImageViewId, stages: vk::PipelineStageFlags2KHR, accesses: vk::AccessFlags2KHR, required_layout: vk::ImageLayout, range: ImageSubresourceRange);
+
+    fn register_event(&mut self, id: id::EventId);
 }
 
-pub trait OpAllocator {
-    type O: Op;
-
-    fn allocate() -> Self::O;
+pub trait Op {
+    fn get_used_objects(&self, registry: &mut dyn ObjectUsageRegistry);
 }
 
-pub trait Op : Any {
-    fn as_any(&self) -> &dyn Any;
-
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-
-    fn register_object_usage(&self, registry: &dyn ObjectUsageRegistry) -> Result<(), &'static str>;
+#[derive(Copy, Clone)]
+pub enum OpPreAction {
 }
 
-pub struct OpContext {
-
+#[derive(Copy, Clone)]
+pub enum OpPostAction {
 }
 
-impl OpContext {
-    fn new() -> Self {
-        Self{}
+pub struct OpEntry<'a> {
+    op: &'a (dyn Op + 'a),
+    pre: Option<bumpalo::boxed::Box<'a, [OpPreAction]>>,
+    post: Option<bumpalo::boxed::Box<'a, [OpPostAction]>>,
+}
+
+impl<'a> OpEntry<'a> {
+    fn make_boxed_list<T: Clone>(list: Option<&[T]>, allocator: &'a Bump) -> Option<bumpalo::boxed::Box<'a, [T]>> {
+        if let Some(list) = list {
+            if list.len() == 0 {
+                None
+            } else {
+                Some(bumpalo::boxed::Box::from_iter_in(list.iter().cloned(), allocator))
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn new<T: Op + 'a>(op: T, allocator: &'a Bump) -> Self {
+        Self {
+            op: allocator.alloc(op),
+            pre: None,
+            post: None,
+        }
+    }
+
+    pub fn new_actions<T: Op + 'a>(op: T, pre: Option<&[OpPreAction]>, post: Option<&[OpPostAction]>, allocator: &'a Bump) -> Self {
+        Self {
+            op: allocator.alloc(op),
+            pre: Self::make_boxed_list(pre, allocator),
+            post: Self::make_boxed_list(post, allocator),
+        }
+    }
+
+    pub fn get_op(&self) -> &(dyn Op + 'a) {
+        self.op
+    }
+
+    pub fn get_pre_actions(&self) -> Option<&[OpPreAction]> {
+        if let Some(pre) = &self.pre {
+            Some(pre.as_ref())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_post_actions(&self) -> Option<&[OpPostAction]> {
+        if let Some(post) = &self.post {
+            Some(post.as_ref())
+        } else {
+            None
+        }
     }
 }
 
-pub struct OpEntry {
-    pub op: Box<dyn Op>,
-    pub context: OpContext,
+impl<'a> Drop for OpEntry<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            // Needed because the reference must be non mut for covariance to work
+            std::ptr::drop_in_place((self.op as *const (dyn Op)) as *mut (dyn Op))
+        }
+    }
 }
 
-pub struct OpList {
-    ops: Vec<OpEntry>,
+struct OpListList<'a> {
+    list: Vec<OpEntry<'a>>,
 }
+
+#[self_referencing]
+struct OpListImpl {
+    allocator: Bump,
+    #[borrows(allocator)]
+    #[covariant]
+    list: OpListList<'this>,
+}
+
+pub struct OpList(OpListImpl);
 
 impl OpList {
-    pub fn allocate_add<'r, T: OpAllocator, F: Fn(&mut T::O, &mut OpContext) -> Result<(), &'r str>>(&mut self, setup: &F) -> Result<(), &'r str> {
-        let mut entry = OpEntry{ op: Box::new(T::allocate()), context: OpContext::new() };
-
-        setup(entry.op.as_mut().as_any_mut().downcast_mut().unwrap(), &mut entry.context)?;
-
-        self.ops.push(entry);
-        Result::Ok(())
+    pub fn new() -> Self {
+        Self(OpListImplBuilder{ allocator: Bump::new(), list_builder: |_| OpListList{ list: Vec::new() } }.build())
     }
 
-    pub fn get_entries(&self) -> &Vec<OpEntry> {
-        &self.ops
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(OpListImplBuilder{ allocator: Bump::new(), list_builder: |_| OpListList{ list: Vec::with_capacity(capacity) } }.build())
     }
+
+    pub fn push<T: Op + Copy + 'static>(&mut self, op: T) {
+        self.0.with_mut(|fields| {
+            
+        });
+    }
+
+    pub fn push_with<F>(&mut self, generator: F) where F: for<'a> FnOnce(&'a Bump) -> OpEntry<'a> {
+        self.0.with_mut(|fields| {
+            fields.list.list.push(generator(fields.allocator));
+        });
+    }
+
+    pub fn get(&self) -> &[OpEntry] {
+        self.0.borrow_list().list.as_slice()
+    }
+}
+
+pub struct OpClearColorImage<'a> {
+    image: id::ImageId,
+    layout: vk::ImageLayout,
+    ranges: bumpalo::boxed::Box<'a, [ImageSubresourceRange]>,
 }

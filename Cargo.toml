@@ -8,12 +8,14 @@ __internal_doc_test = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash = "0.35.1+1.2.203.0"
+ash = "0.35.1"
 ash-window = "0.9.0"
+bumpalo = { version="3.9.1", features=["boxed", "collections"] }
 concurrent-queue = "1.2.2"
 gpu-allocator = "0.16.0"
 lazy_static = "1.4.0"
 log = "0.4.14"
+ouroboros = "0.14.0"
 shaderc = "0.7.3"
 topological-sort = "0.1.0"
 nalgebra = "0.29.0"

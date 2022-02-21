@@ -28,6 +28,8 @@ pub trait ObjectUsageRegistry {
 
 pub trait Op {
     fn get_used_objects(&self, registry: &mut dyn ObjectUsageRegistry);
+
+    fn record(&self, command_buffer: vk::CommandBuffer);
 }
 
 #[derive(Copy, Clone)]
